@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from utils.generic import to_int
+from oracleug.utils.generic import to_int
 
 load_dotenv(override=True)
 

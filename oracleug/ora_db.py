@@ -1,6 +1,6 @@
 import oracledb
 import sys
-from oracle_settings import OracleSettings
+from oracleug.oracle_settings import OracleSettings
 from typing import List, Union
 
 
