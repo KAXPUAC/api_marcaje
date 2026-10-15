@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from v1.router.api import empleados
+from v1.router.api import empleados, sync
 
 app = FastAPI()
 
@@ -21,3 +21,4 @@ def read_item(item_id: int, q: str | None = None):
 
 
 app.include_router(empleados.router, prefix="/api/v1/empleados", tags=["empleados"])
+app.include_router(sync.router, prefix="/api/v1/sync", tags=["sincrinización"])

@@ -5,7 +5,7 @@ import boto3
 load_dotenv(override=True)
 from pathlib import Path
 
-env_path = Path(__file__).parent / ".env"
+env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 
@@ -34,5 +34,6 @@ class AWSSettings:
             region_name=self.region,
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key)
+
 
 aws_settings = AWSSettings()

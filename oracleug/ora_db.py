@@ -1,5 +1,6 @@
 import oracledb
 import sys
+import base64
 from oracleug.oracle_settings import OracleSettings
 from typing import List, Union
 
@@ -477,22 +478,6 @@ class Oradb:
     def execute_query(self, query: str, params: List[dict]) -> Union[List[dict], None]:
         """
         Ejecuta una consulta SQL en Oracle con los parámetros proporcionados.
-
-        Args:
-            query (str): Consulta SQL a ejecutar.
-            params (List[dict]): Lista de diccionarios que contienen información de los parámetros.
-                Cada diccionario debe contener las siguientes claves:
-                - "nombre": Nombre del parámetro.
-                - "valor": Valor del parámetro.
-                - "tipo": Tipo de dato del parámetro (debe ser uno de los valores definidos en la clase ODBType).
-                - "direccion": Dirección del parámetro (debe ser uno de los valores: "IN", "OUT", "IN/OUT").
-
-        Returns:
-            Union[List[dict], None]: Una lista de diccionarios que representa las filas resultantes de la consulta,
-            o None si ocurre un error.
-
-        Raises:
-            ConnectionError: Si ocurre un error al crear o establecer la conexión con la base de datos.
         """
         try:
             if self.transaction is False:
@@ -531,7 +516,20 @@ class Oradb:
                         ora_psqlcode["PSQLCODE"] = cursor.var(oracledb.DB_TYPE_VARCHAR)
                         ora_psqlcode["PSQLCODE"].setvalue(0, "0")
                     elif param_type == ODBType.BLOB:
-                        param_value = bytes(param_value, "utf-8")
+                        if isinstance(param_value, str):
+                            param_value = param_value.encode("utf-8")
+                    # --- TRATAMIENTO LONG RAW / RAW PARA PARÁMETROS DE ENTRADA / SALIDA ---
+                    elif param_type in [ODBType.LONG_RAW, ODBType.RAW]:
+                        if param_direction == "IN":
+                            if isinstance(param_value, str):
+                                param_value = param_value.encode("utf-8")
+                        elif param_direction in ["OUT", "IN/OUT"]:
+                            db_type = (
+                                oracledb.DB_TYPE_LONG_RAW
+                                if param_type == ODBType.LONG_RAW
+                                else oracledb.DB_TYPE_RAW
+                            )
+                            param_value = cursor.var(db_type)
 
                     if param_direction == "IN":
                         send_params.append(param_value)
@@ -548,6 +546,7 @@ class Oradb:
 
                 cursor.execute(query, send_params)
 
+                # --- LECTURA DE RESULTADOS (SELECT) ---
                 if cursor.description:
                     result = []
                     for row in cursor:
@@ -555,14 +554,41 @@ class Oradb:
                         for i, col in enumerate(cursor.description):
                             col_name = col[0]
                             col_value = row[i]
+
+                            # 1. Si es un LOB de Oracle (BLOB / CLOB)
                             if isinstance(col_value, oracledb.LOB):
                                 col_value = col_value.read()
+
+                            # 2. Si el valor resulta ser de tipo bytes (LONG RAW, RAW o BLOB leídos)
+                            if isinstance(col_value, bytes):
+                                col_value = base64.b64encode(col_value).decode("utf-8")
+
                             col_name_camel_case = self.convert_camel_case(col_name)
                             row_dict[col_name_camel_case] = col_value
                         result.append(row_dict)
                     return result
+
+                # --- LECTURA DE PARÁMETROS OUT / IN/OUT (si no fue un SELECT) ---
+                elif dynamic_vars:
+                    out_results = {}
+                    for name, var, p_type in zip(
+                            dynamic_var_names, dynamic_vars, dynamic_var_types
+                    ):
+                        val = var.getvalue()
+
+                        # Convertir LOB o bytes provenientes de parámetros OUT
+                        if isinstance(val, oracledb.LOB):
+                            val = val.read()
+                        if isinstance(val, bytes):
+                            val = base64.b64encode(val).decode("utf-8")
+
+                        out_results[self.convert_camel_case(name)] = val
+
+                    return [out_results]
+
                 else:
                     return None
+
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             if self.transaction is False:
                 self.connection.rollback()
