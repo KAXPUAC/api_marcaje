@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException
+from oracleug.models.dynamics import Dynamics
+from requests import Request
 from services.sync_service import SyncService
-from services.s3_service import S3Service
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sync", tags=["Sincronización"])
+
 
 @router.post("/departamento/{coddepa}/status")
 async def departamento_status(coddepa: str):
@@ -18,13 +20,18 @@ async def departamento_status(coddepa: str):
         raise HTTPException(status_code=500, detail=str(message))
 
 
-@router.get("/buckets")
-async def listar_buckets():
-    """Lista los buckets de S3 disponibles."""
+@router.get("/departamentos")
+async def get_departamentos():
+    """Obtiene la lista de departamentos de Oracle"""
     try:
-        s3 = S3Service()
-        return s3.list_buckets()
+        dynamics = Dynamics()
+        deptos = dynamics.obtener_departamentos()
+        if "RETVAL" in deptos:
+            return deptos["RETVAL"]
+        else:
+            message = "No se obtuvo la lista de departamentos"
+            logger.error(message)
+            raise HTTPException(status_code=500, detail=message)
     except Exception as e:
-        message = f"Error al listar buckets: {e}"
-        logger.error(message)
+        message = f"Error al obtener departamentos: {e}"
         raise HTTPException(status_code=500, detail=str(message))
