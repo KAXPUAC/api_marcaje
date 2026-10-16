@@ -14,26 +14,29 @@ class AWSSettings:
         if not os.path.exists(env_path):
             raise Exception("No se encontró el archivo de entorno")
         try:
-            self._region: str = os.getenv("AWS_REGION", "us-east-1")
-            self._access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
-            self._secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-            self.bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME", "")
+            self.__region: str = os.getenv("AWS_REGION", "us-east-1")
+            self.__access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+            self.__secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+            self.__bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME", "")
         except Exception as e:
             raise Exception(f"Error al cargar las configuraciones de AWS: {e}")
 
     def rekognition(self):
         return boto3.client(
             'rekognition',
-            region_name=self._region,
-            aws_access_key_id=self._access_key_id,
-            aws_secret_access_key=self._secret_access_key)
+            region_name=self.__region,
+            aws_access_key_id=self.__access_key_id,
+            aws_secret_access_key=self.__secret_access_key)
 
     def s3(self):
         return boto3.client(
             's3',
-            region_name=self._region,
-            aws_access_key_id=self._access_key_id,
-            aws_secret_access_key=self._secret_access_key)
+            region_name=self.__region,
+            aws_access_key_id=self.__access_key_id,
+            aws_secret_access_key=self.__secret_access_key)
+
+    def bucket_name(self):
+        return self.__bucket_name
 
 
 aws_settings = AWSSettings()

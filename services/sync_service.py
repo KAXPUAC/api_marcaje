@@ -61,7 +61,7 @@ class SyncService:
         s3_nombre = f"{correlativo}.jpg"
         try:
             s3_client.put_object(
-                Bucket=aws_settings.bucket_name,
+                Bucket=aws_settings.bucket_name(),
                 Key=f"{s3_ruta}{s3_nombre}",
                 Body=foto_bytes,
                 ContentType='image/jpeg',
