@@ -1,45 +1,42 @@
 from oracleug.ora_db import Oradb, ODBType
 
-db = Oradb()
-
 
 class Empleados:
+    __script = """SELECT B.CORRELATIVO, B.NOMBRE, B.CODDEPA, B.DEPARTAMENTO, A.FOTO
+                  FROM DBAFISICC.CACARNETBITB A,
+                       DBAFISICC.EMPLEADOSDYNAMICSVW B
+                  WHERE A.CORRELATIVO = B.CORRELATIVO"""
+
+    __coddepa = """SELECT B.CORRELATIVO, B.NOMBRE, B.CODDEPA, B.DEPARTAMENTO, A.FOTO
+                   FROM DBAFISICC.CACARNETBITB A,
+                        DBAFISICC.EMPLEADOSDYNAMICSVW B
+                   WHERE A.CORRELATIVO = B.CORRELATIVO
+                     AND B.CODDEPA = :1"""
+
+    __info = """SELECT NOMBREPILA, DPI, CARNET
+                FROM DBAFISICC.CACARNETBITB
+                WHERE CORRELATIVO = :1"""
+
     def __init__(self):
-        self.__script__ = """SELECT B.CORRELATIVO, B.NOMBRE, B.CODDEPA, B.DEPARTAMENTO, A.FOTO
-                             FROM DBAFISICC.CACARNETBITB A,
-                                  DBAFISICC.EMPLEADOSDYNAMICSVW B
-                             WHERE A.CORRELATIVO = B.CORRELATIVO"""
-
-        self.__coddepa__ = """SELECT B.CORRELATIVO, B.NOMBRE, B.CODDEPA, B.DEPARTAMENTO, A.FOTO
-                              FROM DBAFISICC.CACARNETBITB A,
-                                   DBAFISICC.EMPLEADOSDYNAMICSVW B
-                              WHERE A.CORRELATIVO = B.CORRELATIVO
-                                AND B.CODDEPA = :1"""
-
-        self.__info__ = """SELECT NOMBREPILA, DPI, CARNET
-                           FROM DBAFISICC.CACARNETBITB
-                           WHERE CORRELATIVO = :1"""
+        self.__con = Oradb()
 
     def get_empleados(self):
-        print("Ejecutando script para obtener empleados...")
-        return db.execute_query(query=self.__script__, params=[])
+        return self.__con.execute_query(query=self.__script, params=[])
 
     def get_empleados_coddepa(self, coddepa: str):
-        print("Ejecutando script para obtener empleados...")
         parametros = [{
             "nombre": "coddepa",
             "valor": coddepa,
             "tipo": ODBType.VARCHAR2,
             "direccion": "IN",
         }]
-        return db.execute_query(query=self.__coddepa__, params=parametros)
+        return self.__con.execute_query(query=self.__coddepa, params=parametros)
 
     def get_empleado_info(self, correlativo: str):
-        print("Ejecutando script para obtener info de empleado...")
         parametros = [{
             "nombre": "correlativo",
             "valor": int(correlativo),
             "tipo": ODBType.INT,
             "direccion": "IN",
         }]
-        return db.execute_query(query=self.__info__, params=parametros)
+        return self.__con.execute_query(query=self.__info, params=parametros)
