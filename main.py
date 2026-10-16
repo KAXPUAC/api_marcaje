@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from v1.router.api import empleados, sync
+from v1.router.api import empleados, sync, recognize
 
 app = FastAPI()
 
@@ -21,4 +21,5 @@ def read_item(item_id: int, q: str | None = None):
 
 
 app.include_router(empleados.router, prefix="/api/v1/empleados", tags=["empleados"])
-app.include_router(sync.router, prefix="/api/v1/sync", tags=["sincrinización"])
+app.include_router(recognize.router, prefix="/api/v1/recognize", tags=["Reconocimiento Facial"])
+app.include_router(sync.router, prefix="/api/v1/sync", tags=["Sincronización"])

@@ -16,6 +16,10 @@ class Empleados:
                               WHERE A.CORRELATIVO = B.CORRELATIVO
                                 AND B.CODDEPA = :1"""
 
+        self.__info__ = """SELECT NOMBREPILA, DPI, CARNET
+                           FROM DBAFISICC.CACARNETBITB
+                           WHERE CORRELATIVO = :1"""
+
     def get_empleados(self):
         print("Ejecutando script para obtener empleados...")
         return db.execute_query(query=self.__script__, params=[])
@@ -29,3 +33,13 @@ class Empleados:
             "direccion": "IN",
         }]
         return db.execute_query(query=self.__coddepa__, params=parametros)
+
+    def get_empleado_info(self, correlativo: str):
+        print("Ejecutando script para obtener info de empleado...")
+        parametros = [{
+            "nombre": "correlativo",
+            "valor": int(correlativo),
+            "tipo": ODBType.INT,
+            "direccion": "IN",
+        }]
+        return db.execute_query(query=self.__info__, params=parametros)
