@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from services.sync_service import SyncService
+from services.s3_service import S3Service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -11,12 +12,19 @@ async def departamento_status(coddepa: str):
     """Verifica el estado de sincronización de un departamento."""
     try:
         return SyncService.sincronizar_departamento(coddepa)
-        """return {
-            'departamento': coddepa,
-            'total_empleados': result['total'],
-            'exitosos': result['exitosos'],
-            'errores': result['errores']
-        }"""
     except Exception as e:
-        logger.error(f"Error al verificar estado del departamento {coddepa}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        message = f"Error al verificar estado del departamento {coddepa}: {e}"
+        logger.error(message)
+        raise HTTPException(status_code=500, detail=str(message))
+
+
+@router.get("/buckets")
+async def listar_buckets():
+    """Lista los buckets de S3 disponibles."""
+    try:
+        s3 = S3Service()
+        return s3.list_buckets()
+    except Exception as e:
+        message = f"Error al listar buckets: {e}"
+        logger.error(message)
+        raise HTTPException(status_code=500, detail=str(message))
