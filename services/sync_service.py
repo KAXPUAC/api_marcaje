@@ -28,7 +28,7 @@ class SyncService:
     def sincronizar_departamento(cls, coddepa: str) -> Dict:
         empleados = Empleados()
         datos = empleados.get_empleados_coddepa(coddepa)
-        logger.info(f"Codigo Departamento {coddepa}: {len(datos)} empleados con foto")
+        logger.info(f"Código Departamento {coddepa}: {len(datos)} empleados con foto")
         result = {
             "total": len(datos),
             "exitosos": 0,
@@ -75,29 +75,6 @@ class SyncService:
         except Exception as e:
             logger.error(f"Error subiendo empleado {correlativo} a S3: {str(e)}")
             subido = False
-
         logger.info(f"Empleado {correlativo} subido a S3 en {s3_ruta}{s3_nombre}")
-
-        collection_id = RekognitionService.obtener_nombre_coleccion(coddepa)
-        RekognitionService.asegurar_collection_existe(collection_id)
-
-        try:
-            response = aws_settings.rekognition().index_faces(
-                CollectionId=collection_id,
-                Image={'Bytes': foto_bytes},
-                ExternalImageId=correlativo,
-                DetectionAttributes=['DEFAULT'],
-                QualityFilter='AUTO'
-            )
-            face_records = response.get('FaceRecords', [])
-            if not face_records:
-                raise ValueError(f"No se pudo indexar la cara del empleado {correlativo} en Rekognition.")
-
-            face_id = face_records[0]['Face']['FaceId']
-            logger.info(
-                f"Empleado {correlativo} indexado en Rekognition con FaceId: {face_id}, ExternalImageId: {correlativo}")
-
-        except Exception as e:
-            # logger.error(f"Error indexando empleado {correlativo} en Rekognition: {str(e)}")
-            print(f"Error indexando empleado {correlativo} en Rekognition: {str(e)}")
+        RekognitionService.indexar_rostro(departamento_id=coddepa, image_bytes=foto_bytes, correlativo=correlativo)
         return subido

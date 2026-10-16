@@ -20,6 +20,6 @@ def read_item(item_id: int, q: str | None = None):
     return {"item_id": item_id, "q": q}
 
 
-app.include_router(empleados.router, prefix="/api/v1/empleados", tags=["empleados"])
-app.include_router(recognize.router, prefix="/api/v1/recognize", tags=["Reconocimiento Facial"])
-app.include_router(sync.router, prefix="/api/v1/sync", tags=["Sincronización"])
+app.include_router(empleados.router, prefix="/api/v1", tags=["empleados"])
+app.include_router(recognize.router, prefix="/api/v1", tags=["Reconocimiento Facial"])
+app.include_router(sync.router, prefix="/api/v1", tags=["Sincronización"])
