@@ -1,9 +1,0 @@
-class OracleDBType:
-    VARCHAR2 = "VARCHAR2"
-    DECIMAL = "NUMBER"
-    SYS_REFCURSOR = "CURSOR"
-    NUMBER = "NUMBER"
-    DATE = "DATE"
-    VARCHARLIST = "ARRAYVARCHAR2"
-    PSQLCODE = "INT"
-    INT = 'INT'

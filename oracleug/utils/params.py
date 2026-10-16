@@ -3,55 +3,66 @@ import datetime
 import oracledb
 
 
-def new_param(pnombre: str, pvalor: Any, ptipo: str, pdireccion: str):
+def _parse_date(value: Any):
+    """Convierte a datetime/date. Acepta objeto date/datetime o string DD/MM/YYYY[THH:MM[:SS]]."""
+    if isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, datetime.date):
+        return value
+    if not value:
+        return datetime.datetime.now()
+    text = str(value)
+    if "T" in text:
+        date_part, time_part = text.split("T", 1)
+        d, m, y = (int(x) for x in date_part.split("/"))
+        hh, mm, *rest = time_part.split(":")
+        ss = int(rest[0]) if rest else 0
+        return datetime.datetime(y, m, d, hh, mm, ss)
+    d, m, y = (int(x) for x in text.split("/"))
+    return datetime.date(y, m, d)
+
+
+def _to_int(value: Any):
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _to_float(value: Any):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _to_str(value: Any):
+    return None if value is None else str(value)
+
+
+# ODBType -> (tipo oracledb, convertidor)
+_TYPE_MAP = {
+    "VARCHAR2": (oracledb.DB_TYPE_VARCHAR, _to_str),
+    "NUMBER": (oracledb.DB_TYPE_NUMBER, _to_float),
+    "INTEGER": (oracledb.DB_TYPE_NUMBER, _to_int),
+    "CURSOR": (oracledb.DB_TYPE_CURSOR, lambda v: v),
+    "DATE": (oracledb.DB_TYPE_DATE, _parse_date),
+    "BLOB": (oracledb.DB_TYPE_BLOB, lambda v: v),
+    "PSQLCODE": (oracledb.DB_TYPE_VARCHAR, _to_str),
+    "ARRAYVARCHAR2": (oracledb.DB_TYPE_VARCHAR, _to_str),
+}
+
+
+def params(pnombre: str, pvalor: Any, ptipo: str, direc: str = "IN") -> dict:
+    key = str(ptipo).upper()
+    ora_type, converter = _TYPE_MAP.get(key, (oracledb.DB_TYPE_VARCHAR, _to_str))
     return {
-        'nombre': pnombre,
-        'valor': pvalor,
-        'tipo': ptipo,
-        'direccion': pdireccion
-    }
-
-
-def params(pnombre: str, pvalor: Any, ptipo: str, direc: str = 'IN'):
-    ora_type = oracledb.DB_TYPE_VARCHAR
-    py_type = str
-    t_param = str(ptipo).lower()
-    param = {
         "nombre": pnombre,
-        "valor": pvalor,
+        "valor": converter(pvalor),
         "tipo": ora_type,
-        "tpy": py_type,
-        "direccion": direc
+        "direccion": direc,
     }
-    if t_param == 'date':
-        param['tipo'] = oracledb.DB_TYPE_DATE
-        date_values = pvalor.split("T")
-        if len(date_values) == 2:
-            date = date_values[0].split("/")
-            hours = date_values[1].split(":")
-            param['valor'] = datetime.datetime(int(date[0]), int(date[1]), int(date[2]), int(hours[0]), int(hours[1]))
-        elif len(date_values) == 1:
-            date = date_values[0].split("/")
-            param['valor'] = datetime.date(int(date[0]), int(date[1]), int(date[2]))
-        else:
-            param['valor'] = datetime.datetime.now()
-    elif t_param == 'cursor':
-        param['tipo'] = oracledb.DB_TYPE_CURSOR
-    elif t_param == 'int':
-        param['tipo'] = oracledb.DB_TYPE_NUMBER
-        try:
-            param['valor'] = int(pvalor) if pvalor else None
-        except ValueError:
-            param['valor'] = None
-        param['tpy'] = int
-    elif t_param == 'decimal' or t_param == 'number':
-        param['tipo'] = oracledb.DB_TYPE_NUMBER
-        try:
-            param['valor'] = float(pvalor) if pvalor else None
-        except ValueError:
-            param['valor'] = None
-        param['tpy'] = float
-    else:
-        param['tipo'] = ora_type
-        param['valor'] = str(param['valor'])
-    return param
