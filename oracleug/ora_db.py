@@ -1,8 +1,8 @@
-import oracledb
-import sys
 import base64
-from oracleug.oracle_settings import OracleSettings
+import oracledb
 from typing import List, Union
+
+from oracleug.oracle_settings import OracleSettings
 
 
 class ODBType:
@@ -17,6 +17,8 @@ class ODBType:
     INT = "INTEGER"
     VARCHARLIST = "ARRAYVARCHAR2"
     BLOB = "BLOB"
+    LONG_RAW = "LONG_RAW"
+    RAW = "RAW"
 
 
 class ODBDirection:
@@ -32,6 +34,35 @@ class ODBFunctionType:
     NUMBER = "INT"
     STRING = "STRING"
     CURSOR = "CURSOR"
+
+
+# Configuración de los tipos de retorno de las funciones Oracle.
+_CURSOR_FN = {
+    "cursor_type": oracledb.CURSOR,
+    "retval_key": "RETORNO_FUNCION",
+    "default_retval": [],
+    "process_result": True,
+}
+_STRING_FN = {
+    "cursor_type": oracledb.STRING,
+    "retval_key": "RETORNO_FUNCION",
+    "default_retval": None,
+    "process_result": False,
+}
+_NUMBER_FN = {
+    "cursor_type": oracledb.NATIVE_INT,
+    "retval_key": "RETORNO_FUNCION",
+    "default_retval": None,
+    "process_result": False,
+}
+
+_FUNCTION_TYPES = {
+    ODBFunctionType.CURSOR: _CURSOR_FN,
+    "SYS_REFCURSOR": _CURSOR_FN,
+    ODBFunctionType.STRING: _STRING_FN,
+    ODBFunctionType.NUMBER: _NUMBER_FN,
+    "NUMBER": _NUMBER_FN,
+}
 
 
 class Oradb:
@@ -65,11 +96,11 @@ class Oradb:
         self.incr_conns = settings.incr_conns
         self.host = settings.db_host
         self.service = settings.db_name
-        self.pool = settings.pool
+        self.db_port = settings.db_port
         self.dsn = settings.db_dns
+        self.pool = None
         self.connection = None
         self.transaction = False
-        self.module_name = sys.modules[__name__]
 
     def convert_camel_case(self, texto: str) -> str:
         """
@@ -82,9 +113,7 @@ class Oradb:
             str: La cadena convertida en formato camelCase.
         """
         palabras = texto.split("_")
-        camel_case = "_".join(
-            palabra.capitalize() for i, palabra in enumerate(palabras)
-        )
+        camel_case = "_".join(palabra.capitalize() for palabra in palabras)
         return camel_case
 
     def process_sys_refcursor(self, sys_refcursor):
@@ -97,75 +126,134 @@ class Oradb:
         Returns:
             List[dict]: Una lista de diccionarios que representa las filas en el SYS_REFCURSOR.
         """
+        header = [self.convert_camel_case(col[0]) for col in sys_refcursor.description]
         cursor_results = []
         for row in sys_refcursor:
             row_dict = {}
-            for i, col in enumerate(sys_refcursor.description):
-                col_name = col[0]
+            for i, col_name in enumerate(header):
                 col_value = row[i]
                 if isinstance(col_value, oracledb.LOB):
                     col_value = col_value.read()
-                col_name_camel_case = self.convert_camel_case(col_name)
-                row_dict[col_name_camel_case] = col_value
-
+                row_dict[col_name] = col_value
             cursor_results.append(row_dict)
         return cursor_results
 
-    def get_dynamic_values(self, dynamic_var_names, dynamic_vars, dynamic_var_types):
-        """
-        Obtiene los valores dinámicos de las variables en base a sus nombres, valores y tipos.
+    @staticmethod
+    def _convert_value(value):
+        """Convierte LOB a su contenido y bytes a base64."""
+        if isinstance(value, oracledb.LOB):
+            value = value.read()
+        if isinstance(value, bytes):
+            value = base64.b64encode(value).decode("utf-8")
+        return value
 
-        Args:
-            dynamic_var_names (list): Lista de nombres de variables dinámicas.
-            dynamic_vars (list): Lista de valores de variables dinámicas.
-            dynamic_var_types (list): Lista de tipos de variables dinámicas.
+    def _read_rows(self, cursor) -> List[dict]:
+        """Lee las filas de un cursor y las devuelve como lista de diccionarios."""
+        header = [self.convert_camel_case(col[0]) for col in cursor.description]
+        return [
+            {header[i]: self._convert_value(row[i]) for i in range(len(header))}
+            for row in cursor
+        ]
 
-        Returns:
-            dict: Un diccionario que contiene los valores dinámicos indexados por nombre de variable.
+    def _process_cursor(self, cursor_var) -> List[dict]:
+        """Procesa una variable de cursor OUT y devuelve sus filas."""
+        if cursor_var is None:
+            return []
+        value = cursor_var.getvalue()
+        if value is None:
+            return []
+        header = [self.convert_camel_case(col[0]) for col in value.description]
+        return [dict(zip(header, row)) for row in value.fetchall()]
+
+    @staticmethod
+    def _bind_params(cursor, params):
         """
-        dynamic_values = {}
-        for name, dynamic_var, param_type in zip(
-                dynamic_var_names, dynamic_vars, dynamic_var_types
-        ):
-            if param_type == ODBType.SYS_REFCURSOR:
-                value = []
-                cursor_var = dynamic_var.getvalue()
-                if cursor_var is not None:
-                    for row in cursor_var:
-                        row_dict = dict(
-                            zip([str(d[0]) for d in cursor_var.description], row)
-                        )
-                        converted_row_dict = {
-                            self.convert_camel_case(k): v for k, v in row_dict.items()
-                        }
-                        value.append(converted_row_dict)
-            elif param_type == ODBType.PSQLCODE:
-                value = dynamic_var.getvalue()
+        Crea las variables de cursor para cada parámetro y devuelve
+        (lista de parámetros a enviar, diccionario de variables por clave).
+        """
+        ora_param = {}
+        send_param = []
+        for param in params:
+            direc = param["direccion"]
+            nombre = param["nombre"].lower()
+            if direc == "IN":
+                key = f"in_{nombre}"
+                var = cursor.var(param["tipo"])
+                var.setvalue(0, param["valor"])
+            elif direc == "OUT":
+                key = f"out_{nombre}"
+                var = cursor.var(param["tipo"])
+            elif direc == "IN/OUT":
+                key = f"out_{nombre}"
+                var = cursor.var(param["tipo"])
+                var.setvalue(0, param["valor"])
             else:
-                value = dynamic_var
-            dynamic_values[name] = value
-        return dynamic_values
+                continue
+            ora_param[key] = var
+            send_param.append(var)
+        return send_param, ora_param
 
-    function_mappings = {
-        ODBFunctionType.CURSOR: {
-            "cursor_type": oracledb.CURSOR,
-            "retval_key": "RETORNO_FUNCION",
-            "default_retval": [],
-            "process_result": True,
-        },
-        ODBFunctionType.STRING: {
-            "cursor_type": oracledb.STRING,
-            "retval_key": "RETORNO_FUNCION",
-            "default_retval": None,
-            "process_result": False,
-        },
-        ODBFunctionType.NUMBER: {
-            "cursor_type": oracledb.NATIVE_INT,
-            "retval_key": "RETORNO_FUNCION",
-            "default_retval": None,
-            "process_result": False,
-        },
-    }
+    @staticmethod
+    def _process_query_params(cursor, params):
+        """
+        Procesa los parámetros de una consulta y devuelve
+        (lista de parámetros a enviar, variables dinámicas, nombres de variables dinámicas).
+        """
+        send_params = []
+        dynamic_vars = []
+        dynamic_var_names = []
+        ora_psqlcode = {}
+
+        for param in params:
+            param_name = param["nombre"]
+            param_value = param["valor"]
+            param_type = param["tipo"]
+            param_direction = param["direccion"]
+
+            if param_type == ODBType.DATE:
+                pass  # sin conversión
+            elif param_type == ODBType.SYS_REFCURSOR:
+                param_value = cursor.var(oracledb.CURSOR)
+            elif param_type in [
+                ODBType.INT,
+                ODBType.DECIMAL,
+                ODBType.NUMBER,
+                ODBType.VARCHAR2,
+            ]:
+                param_value = str(param_value) if param_value is not None else None
+            elif param_type == ODBType.VARCHARLIST:
+                param_value = oracledb.Array(param_value, oracledb.STRING, 32767)
+            elif param_type == ODBType.PSQLCODE:
+                ora_psqlcode["PSQLCODE"] = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                ora_psqlcode["PSQLCODE"].setvalue(0, "0")
+            elif param_type == ODBType.BLOB:
+                if isinstance(param_value, str):
+                    param_value = param_value.encode("utf-8")
+            elif param_type in [ODBType.LONG_RAW, ODBType.RAW]:
+                if param_direction == "IN":
+                    if isinstance(param_value, str):
+                        param_value = param_value.encode("utf-8")
+                elif param_direction in ["OUT", "IN/OUT"]:
+                    db_type = (
+                        oracledb.DB_TYPE_LONG_RAW
+                        if param_type == ODBType.LONG_RAW
+                        else oracledb.DB_TYPE_RAW
+                    )
+                    param_value = cursor.var(db_type)
+
+            if param_direction == "IN":
+                send_params.append(param_value)
+            if param_direction in ["OUT", "IN/OUT"]:
+                dynamic_var = (
+                    ora_psqlcode["PSQLCODE"]
+                    if param_type == ODBType.PSQLCODE
+                    else param_value
+                )
+                send_params.append(dynamic_var)
+                dynamic_vars.append(dynamic_var)
+                dynamic_var_names.append(param_name)
+
+        return send_params, dynamic_vars, dynamic_var_names
 
     def create_pool(self):
         """
@@ -222,7 +310,7 @@ class Oradb:
                 self.connection = self.pool.acquire()
             else:
                 self.dsn = oracledb.makedsn(
-                    self.host, "1521", service_name=self.service
+                    self.host, self.db_port, service_name=self.service
                 )
                 self.connection = oracledb.connect(
                     user=self.db_user, password=self.db_pass, dsn=self.dsn
@@ -310,55 +398,20 @@ class Oradb:
             if not self.transaction:
                 self.connect()
             with self.connection.cursor() as cursor:
-                ora_param = {}
-                send_param = []
-                result = {}
-
-                header_table = []
-                result_table = []
-                for param in params:
-                    direc = param["direccion"]
-                    if direc == "IN":
-                        key = f'in_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        ora_param[key].setvalue(0, param["valor"])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
-                    elif direc == "OUT":
-                        key = f'out_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
-                    elif direc == "IN/OUT":
-                        key = f'out_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        ora_param[key].setvalue(0, param["valor"])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
+                send_param, ora_param = self._bind_params(cursor, params)
                 cursor.callproc(procedure_name, send_param)
+
+                result = {}
                 for param in params:
-                    key = f'out_{(param["nombre"]).lower()}'
-                    if param['tipo'] == oracledb.CURSOR:
-                        out_ret = ora_param.get(key)
-                        if out_ret is None or out_ret.getvalue() is None:
-                            result[param['nombre']] = []
-                            continue
-                        header_table = []
-                        result_table = []
-                        for nameColumn in out_ret.getvalue().description:
-                            header_table.append(self.convert_camel_case(nameColumn[0]))
-                        for row in out_ret.getvalue().fetchall():
-                            row_table = {}
-                            for i in range(len(header_table)):
-                                row_table[header_table[i]] = row[i]
-                            result_table.append(row_table)
-                        result[param['nombre']] = result_table
-                    elif param['direccion'] == "OUT" or param['direccion'] == "IN/OUT":
+                    key = f'out_{param["nombre"].lower()}'
+                    if param["tipo"] == oracledb.DB_TYPE_CURSOR:
+                        result[param["nombre"]] = self._process_cursor(ora_param.get(key))
+                    elif param["direccion"] in ("OUT", "IN/OUT"):
                         if key in ora_param:
                             result[param["nombre"]] = ora_param[key].getvalue()
                 return result
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
-            if not self.transaction:
+            if not self.transaction and self.connection is not None:
                 self.connection.rollback()
             return {"OOPS": str(e)}
         finally:
@@ -388,86 +441,33 @@ class Oradb:
         Raises:
             ConnectionError: Si ocurre un error al crear o establecer la conexión con la base de datos.
         """
+        config = _FUNCTION_TYPES.get(type_function)
+        if config is None:
+            raise ValueError(f"Tipo de función no soportado: {type_function}")
+
         try:
             if not self.transaction:
                 self.connect()
             with self.connection.cursor() as cursor:
-                ora_param = {}
-                send_param = []
+                send_param, ora_param = self._bind_params(cursor, params)
+                retval = cursor.callfunc(function_name, config["cursor_type"], send_param)
+
                 result = {}
-
-                header_table = []
-                row_table = {}
-                result_table = []
-
                 for param in params:
-                    direc = param["direccion"]
-                    if direc == "IN":
-                        key = f'in_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        ora_param[key].setvalue(0, param["valor"])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
-                    elif direc == "OUT":
-                        key = f'out_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
-                    elif direc == "IN/OUT":
-                        key = f'out_{(param["nombre"]).lower()}'
-                        ora_param[key] = cursor.var(param['tipo'])
-                        ora_param[key].setvalue(0, param["valor"])
-                        setattr(self.module_name, key, ora_param[key])
-                        send_param.append(getattr(self.module_name, key))
+                    key = f'out_{param["nombre"].lower()}'
+                    if param["tipo"] == oracledb.DB_TYPE_CURSOR:
+                        result[param["nombre"]] = self._process_cursor(ora_param.get(key))
+                    elif param["direccion"] in ("OUT", "IN/OUT"):
+                        if key in ora_param:
+                            result[param["nombre"]] = ora_param[key].getvalue()
 
-                if type_function == 'SYS_REFCURSOR':
-                    cursor_type = oracledb.CURSOR
-                    retval_key = 'RETORNO_FUNCION'
-                    default_retval = []
-                    process_result = True
-                if type_function == 'NUMBER' or type_function == 'INT':
-                    cursor_type = oracledb.NATIVE_INT
-                    retval_key = 'RETORNO_FUNCION'
-                    default_retval = None
-                    process_result = False
-
-                if type_function == 'STRING':
-                    cursor_type = oracledb.STRING
-                    retval_key = 'RETORNO_FUNCION'
-                    default_retval = None
-                    process_result = False
-
-                retval = cursor.callfunc(function_name, cursor_type, send_param)
-
-                for param in params:
-                    if param['tipo'] == oracledb.DB_TYPE_CURSOR:
-                        key = f'out_{(param["nombre"]).lower()}'
-                        out_ret = getattr(self.module_name, key)
-                        for nameColumn in out_ret.getvalue().description:
-                            header_table.append(self.convert_camel_case(nameColumn[0]))
-                        for implicit_cursor in out_ret.values:
-                            for row in implicit_cursor:
-                                for i in range(len(header_table)):
-                                    row_table[header_table[i]] = row[i]
-                                result_table.append(row_table)
-                        result[param['Nombre']] = result_table
-                        delattr(self.module_name, key)
-                    elif param['direccion'] == "OUT" or param['direccion'] == "IN/OUT":
-                        key = f'out_{(param["nombre"]).lower()}'
-                        ora_param[key] = getattr(self.module_name, key)
-                        result[param["nombre"]] = ora_param[key].getvalue()
-                        delattr(self.module_name, key)
-
-                if process_result and retval is not None:
+                if config["process_result"] and retval is not None:
                     cursor_results = self.process_sys_refcursor(retval)
                 else:
-                    cursor_results = default_retval if retval is None else retval
-                return {
-                    retval_key: cursor_results,
-                    **result
-                }
+                    cursor_results = config["default_retval"] if retval is None else retval
+                return {config["retval_key"]: cursor_results, **result}
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
-            if not self.transaction:
+            if not self.transaction and self.connection is not None:
                 self.connection.rollback()
             return {"OOPS": str(e)}
         finally:
@@ -480,121 +480,28 @@ class Oradb:
         Ejecuta una consulta SQL en Oracle con los parámetros proporcionados.
         """
         try:
-            if self.transaction is False:
+            if not self.transaction:
                 self.connect()
             with self.connection.cursor() as cursor:
-                send_params = []
-                dynamic_vars = []
-                dynamic_var_names = []
-                dynamic_var_types = []
-                ora_psqlcode = {}
-
-                for param in params:
-                    param_name = param["nombre"]
-                    param_value = param["valor"]
-                    param_type = param["tipo"]
-                    param_direction = param["direccion"]
-
-                    if param_type == ODBType.DATE:
-                        param_value = param_value
-                    elif param_type == ODBType.SYS_REFCURSOR:
-                        param_value = cursor.var(oracledb.CURSOR)
-                    elif param_type in [
-                        ODBType.INT,
-                        ODBType.DECIMAL,
-                        ODBType.NUMBER,
-                        ODBType.VARCHAR2,
-                    ]:
-                        param_value = (
-                            str(param_value) if param_value is not None else None
-                        )
-                    elif param_type == ODBType.VARCHARLIST:
-                        param_value = oracledb.Array(
-                            param_value, oracledb.STRING, 32767
-                        )
-                    elif param_type == ODBType.PSQLCODE:
-                        ora_psqlcode["PSQLCODE"] = cursor.var(oracledb.DB_TYPE_VARCHAR)
-                        ora_psqlcode["PSQLCODE"].setvalue(0, "0")
-                    elif param_type == ODBType.BLOB:
-                        if isinstance(param_value, str):
-                            param_value = param_value.encode("utf-8")
-                    # --- TRATAMIENTO LONG RAW / RAW PARA PARÁMETROS DE ENTRADA / SALIDA ---
-                    elif param_type in [ODBType.LONG_RAW, ODBType.RAW]:
-                        if param_direction == "IN":
-                            if isinstance(param_value, str):
-                                param_value = param_value.encode("utf-8")
-                        elif param_direction in ["OUT", "IN/OUT"]:
-                            db_type = (
-                                oracledb.DB_TYPE_LONG_RAW
-                                if param_type == ODBType.LONG_RAW
-                                else oracledb.DB_TYPE_RAW
-                            )
-                            param_value = cursor.var(db_type)
-
-                    if param_direction == "IN":
-                        send_params.append(param_value)
-                    if param_direction in ["OUT", "IN/OUT"]:
-                        dynamic_var = (
-                            ora_psqlcode["PSQLCODE"]
-                            if param_type == ODBType.PSQLCODE
-                            else param_value
-                        )
-                        send_params.append(dynamic_var)
-                        dynamic_vars.append(dynamic_var)
-                        dynamic_var_names.append(param_name)
-                        dynamic_var_types.append(param_type)
-
+                send_params, dynamic_vars, dynamic_var_names = self._process_query_params(cursor, params)
                 cursor.execute(query, send_params)
 
-                # --- LECTURA DE RESULTADOS (SELECT) ---
                 if cursor.description:
-                    result = []
-                    for row in cursor:
-                        row_dict = {}
-                        for i, col in enumerate(cursor.description):
-                            col_name = col[0]
-                            col_value = row[i]
+                    return self._read_rows(cursor)
 
-                            # 1. Si es un LOB de Oracle (BLOB / CLOB)
-                            if isinstance(col_value, oracledb.LOB):
-                                col_value = col_value.read()
-
-                            # 2. Si el valor resulta ser de tipo bytes (LONG RAW, RAW o BLOB leídos)
-                            if isinstance(col_value, bytes):
-                                col_value = base64.b64encode(col_value).decode("utf-8")
-
-                            col_name_camel_case = self.convert_camel_case(col_name)
-                            row_dict[col_name_camel_case] = col_value
-                        result.append(row_dict)
-                    return result
-
-                # --- LECTURA DE PARÁMETROS OUT / IN/OUT (si no fue un SELECT) ---
-                elif dynamic_vars:
+                if dynamic_vars:
                     out_results = {}
-                    for name, var, p_type in zip(
-                            dynamic_var_names, dynamic_vars, dynamic_var_types
-                    ):
-                        val = var.getvalue()
-
-                        # Convertir LOB o bytes provenientes de parámetros OUT
-                        if isinstance(val, oracledb.LOB):
-                            val = val.read()
-                        if isinstance(val, bytes):
-                            val = base64.b64encode(val).decode("utf-8")
-
-                        out_results[self.convert_camel_case(name)] = val
-
+                    for name, var in zip(dynamic_var_names, dynamic_vars):
+                        out_results[self.convert_camel_case(name)] = self._convert_value(var.getvalue())
                     return [out_results]
 
-                else:
-                    return None
-
+                return None
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
-            if self.transaction is False:
+            if not self.transaction and self.connection is not None:
                 self.connection.rollback()
             return {"OOPS": str(e)}
         finally:
-            if self.transaction is False:
+            if not self.transaction:
                 self.commit()
                 self.close_connection()
 
@@ -624,71 +531,12 @@ class Oradb:
             self.begin_transaction()
 
             with self.connection.cursor() as cursor:
-                send_params = []
-                dynamic_vars = []
-                dynamic_var_names = []
-                dynamic_var_types = []
-                ora_psqlcode = {}
-
-                for param in params:
-                    param_name = param["nombre"]
-                    param_value = param["valor"]
-                    param_type = param["tipo"]
-                    param_direction = param["direccion"]
-
-                    if param_type == ODBType.DATE:
-                        param_value = param_value
-                    elif param_type == ODBType.SYS_REFCURSOR:
-                        param_value = cursor.var(oracledb.CURSOR)
-                    elif param_type in [
-                        ODBType.INT,
-                        ODBType.DECIMAL,
-                        ODBType.NUMBER,
-                        ODBType.VARCHAR2,
-                    ]:
-                        param_value = (
-                            str(param_value) if param_value is not None else None
-                        )
-                    elif param_type == ODBType.VARCHARLIST:
-                        param_value = oracledb.Array(
-                            param_value, oracledb.STRING, 32767
-                        )
-                    elif param_type == ODBType.PSQLCODE:
-                        ora_psqlcode["PSQLCODE"] = cursor.var(oracledb.DB_TYPE_VARCHAR)
-                        ora_psqlcode["PSQLCODE"].setvalue(0, "0")
-                    elif param_type == ODBType.BLOB:
-                        param_value = bytes(param_value, "utf-8")
-
-                    if param_direction == "IN":
-                        send_params.append(param_value)
-                    if param_direction in ["OUT", "IN/OUT"]:
-                        dynamic_var = (
-                            ora_psqlcode["PSQLCODE"]
-                            if param_type == ODBType.PSQLCODE
-                            else param_value
-                        )
-                        send_params.append(dynamic_var)
-                        dynamic_vars.append(dynamic_var)
-                        dynamic_var_names.append(param_name)
-                        dynamic_var_types.append(param_type)
-
+                send_params, _, _ = self._process_query_params(cursor, params)
                 cursor.execute(query, send_params)
 
                 if cursor.description:
-                    result = []
-                    for row in cursor:
-                        row_dict = {}
-                        for i, col in enumerate(cursor.description):
-                            col_name = col[0]
-                            col_value = row[i]
-                            if isinstance(col_value, oracledb.LOB):
-                                col_value = col_value.read()
-                            col_name_camel_case = self.convert_camel_case(col_name)
-                            row_dict[col_name_camel_case] = col_value
-                        result.append(row_dict)
-                    return result
-                else:
-                    return None
+                    return self._read_rows(cursor)
+                return None
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             self.rollback_transaction()
             return {"OOPS": str(e)}
