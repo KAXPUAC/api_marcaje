@@ -26,5 +26,19 @@ class OracleSettings:
             self.max_conns: int = to_int(os.getenv("DB_MAX_CONNS_ORA", ''))
             self.incr_conns: int = to_int(os.getenv("DB_INCR_CONNS_ORA", ''))
             self.pool: str = os.getenv("DB_POOL_ORA", '')
+            # security
+            self.__secret_key: str = os.getenv("SECRET_KEY_UG", "")
+            self.__algorithm: str = os.getenv("ALGORITHM", "HS256")
+            self.__access_token_expire_minutes: int = to_int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", '60'))
+
         except Exception as e:
             raise Exception(f"Error al cargar las configuraciones de Oracle: {e}")
+
+    def get_secret_key(self) -> str:
+        return self.__secret_key
+
+    def get_algorithm(self) -> str:
+        return self.__algorithm
+
+    def get_access_token_expire_minutes(self) -> int:
+        return self.__access_token_expire_minutes
