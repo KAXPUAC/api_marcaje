@@ -13,8 +13,8 @@ router = APIRouter(prefix="/sync", tags=["Sincronización"])
 
 
 @router.post("/departamento/{coddepa}/")
-async def departamento_status(coddepa: str):
-    """Verifica el estado de sincronización de un departamento."""
+async def sync_departamento(coddepa: str):
+    """Sincroniza un departamento."""
     try:
         return SyncService.sincronizar_departamento(coddepa)
     except Exception as e:
@@ -23,7 +23,7 @@ async def departamento_status(coddepa: str):
         raise HTTPException(status_code=500, detail=str(message))
 
 @router.post("/departamento/{coddepa}/status/")
-async def sync_status_departamento(coddepa: str):
+async def status_departamento(coddepa: str):
     """Verifica si la collection existe y cuántas caras tiene."""
 
     collection_id = RekognitionService.obtener_nombre_coleccion(coddepa)
