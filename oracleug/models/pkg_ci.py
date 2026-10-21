@@ -8,7 +8,7 @@ class PkgCi:
         self.__con = Oradb()
         self.__types = ODBType()
         self.__direct = ODBDirection()
-        self.__dir_f = ODBFunctionType()
+        self.__function = ODBFunctionType()
         self.retval = params('RETVAL', '', self.__types.SYS_REFCURSOR, self.__direct.OUT)
 
     def autenticar_administrativo(self, usuario: str, contrasena: str):
@@ -18,7 +18,7 @@ class PkgCi:
         ]
         nombre_procedure = "DBAFISICC.PKG_CI.AUTENTICARADMINISTRATIVO"
         return self.__con.execute_function(function_name=nombre_procedure, params=parametros,
-                                           type_function=self.__dir_f.NUMBER)
+                                           type_function=self.__function.NUMBER)
 
     def autenticar(self, usuario: str, contrasena: str, tipo: int):
         parametros = [
@@ -28,4 +28,4 @@ class PkgCi:
         ]
         nombre_procedure = "DBAFISICC.PKG_CI.AUTENTICAR"
         return self.__con.execute_function(function_name=nombre_procedure, params=parametros,
-                                           type_function=self.__dir_f.NUMBER)
+                                           type_function=self.__function.NUMBER)

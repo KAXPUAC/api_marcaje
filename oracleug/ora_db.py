@@ -50,9 +50,9 @@ _STRING_FN = {
     "process_result": False,
 }
 _NUMBER_FN = {
-    "cursor_type": oracledb.NATIVE_INT,
+    "cursor_type": oracledb.NUMBER,
     "retval_key": "RETORNO_FUNCION",
-    "default_retval": None,
+    "default_retval": [],
     "process_result": False,
 }
 
@@ -64,29 +64,25 @@ _FUNCTION_TYPES = {
     "NUMBER": _NUMBER_FN,
 }
 
+ORACLE_TYPE_MAP = {
+    ODBType.VARCHAR2: oracledb.DB_TYPE_VARCHAR,
+    ODBType.NUMBER: oracledb.DB_TYPE_NUMBER,
+    ODBType.DECIMAL: oracledb.DB_TYPE_NUMBER,
+    ODBType.INT: oracledb.DB_TYPE_NUMBER,
+    ODBType.DATE: oracledb.DB_TYPE_DATE,
+    ODBType.SYS_REFCURSOR: oracledb.DB_TYPE_CURSOR,
+    ODBType.BLOB: oracledb.DB_TYPE_BLOB,
+    ODBType.RAW: oracledb.DB_TYPE_RAW,
+    ODBType.LONG_RAW: oracledb.DB_TYPE_LONG_RAW,
+}
+
 
 class Oradb:
     """
     Clase que proporciona métodos para conectar y administrar una conexión a una base de datos Oracle.
-
-    Attributes:
-        db_user (str): Nombre de usuario para la conexión a la base de datos.
-        db_pass (str): Contraseña para la conexión a la base de datos.
-        db_dns (str): DSN (Data Source Name) para la conexión a la base de datos.
-        min_conns (int): Número mínimo de conexiones en el pool.
-        max_conns (int): Número máximo de conexiones en el pool.
-        incr_conns (int): Incremento de conexiones en el pool.
-        host (str): Host de la base de datos.
-        service (str): Nombre del servicio de la base de datos.
-        pool (obj): Pool de conexiones Oracle.
-        connection (obj): Conexión activa a la base de datos.
-        transaction (bool): Indica si la conexión está en una transacción o no.
     """
 
     def __init__(self):
-        """
-        Inicializa una instancia de OracleDBConnector y configura los atributos necesarios para la conexión.
-        """
         settings = OracleSettings()
         self.db_user = settings.db_user
         self.db_pass = settings.db_pass
@@ -103,29 +99,12 @@ class Oradb:
         self.transaction = False
 
     def convert_camel_case(self, texto: str) -> str:
-        """
-        Convierte una cadena en formato snake_case a camelCase.
-
-        Args:
-            texto (str): La cadena en formato snake_case a convertir.
-
-        Returns:
-            str: La cadena convertida en formato camelCase.
-        """
+        """Convierte una cadena en formato snake_case a camelCase."""
         palabras = texto.split("_")
-        camel_case = "_".join(palabra.capitalize() for palabra in palabras)
-        return camel_case
+        return "_".join(palabra.capitalize() for palabra in palabras)
 
     def process_sys_refcursor(self, sys_refcursor):
-        """
-        Procesa un objeto SYS_REFCURSOR y devuelve una lista de diccionarios.
-
-        Args:
-            sys_refcursor: El objeto SYS_REFCURSOR a procesar.
-
-        Returns:
-            List[dict]: Una lista de diccionarios que representa las filas en el SYS_REFCURSOR.
-        """
+        """Procesa un objeto SYS_REFCURSOR y devuelve una lista de diccionarios."""
         header = [self.convert_camel_case(col[0]) for col in sys_refcursor.description]
         cursor_results = []
         for row in sys_refcursor:
@@ -168,24 +147,29 @@ class Oradb:
     @staticmethod
     def _bind_params(cursor, params):
         """
-        Crea las variables de cursor para cada parámetro y devuelve
-        (lista de parámetros a enviar, diccionario de variables por clave).
+        Crea las variables de cursor asociando los tipos nativos de oracledb
+        en lugar de las cadenas de ODBType.
         """
         ora_param = {}
         send_param = []
         for param in params:
             direc = param["direccion"]
             nombre = param["nombre"].lower()
+            raw_type = param["tipo"]
+
+            # Mapeo a tipo nativo de oracledb
+            ora_type = ORACLE_TYPE_MAP.get(raw_type, raw_type)
+
             if direc == "IN":
                 key = f"in_{nombre}"
-                var = cursor.var(param["tipo"])
+                var = cursor.var(ora_type)
                 var.setvalue(0, param["valor"])
             elif direc == "OUT":
                 key = f"out_{nombre}"
-                var = cursor.var(param["tipo"])
+                var = cursor.var(ora_type)
             elif direc == "IN/OUT":
                 key = f"out_{nombre}"
-                var = cursor.var(param["tipo"])
+                var = cursor.var(ora_type)
                 var.setvalue(0, param["valor"])
             else:
                 continue
@@ -195,10 +179,7 @@ class Oradb:
 
     @staticmethod
     def _process_query_params(cursor, params):
-        """
-        Procesa los parámetros de una consulta y devuelve
-        (lista de parámetros a enviar, variables dinámicas, nombres de variables dinámicas).
-        """
+        """Procesa los parámetros para consultas dinámicas `execute`."""
         send_params = []
         dynamic_vars = []
         dynamic_var_names = []
@@ -211,15 +192,13 @@ class Oradb:
             param_direction = param["direccion"]
 
             if param_type == ODBType.DATE:
-                pass  # sin conversión
+                pass  # Mantiene el objeto datetime nativo
             elif param_type == ODBType.SYS_REFCURSOR:
                 param_value = cursor.var(oracledb.CURSOR)
-            elif param_type in [
-                ODBType.INT,
-                ODBType.DECIMAL,
-                ODBType.NUMBER,
-                ODBType.VARCHAR2,
-            ]:
+            elif param_type in [ODBType.INT, ODBType.DECIMAL, ODBType.NUMBER]:
+                # Mantiene el valor numérico sin convertir a string para evitar ORA-06502
+                param_value = param_value
+            elif param_type == ODBType.VARCHAR2:
                 param_value = str(param_value) if param_value is not None else None
             elif param_type == ODBType.VARCHARLIST:
                 param_value = oracledb.Array(param_value, oracledb.STRING, 32767)
@@ -256,15 +235,7 @@ class Oradb:
         return send_params, dynamic_vars, dynamic_var_names
 
     def create_pool(self):
-        """
-        Crea un pool de conexiones Oracle.
-
-        Returns:
-            None
-
-        Raises:
-            ConnectionError: Si ocurre un error al crear el pool de conexiones.
-        """
+        """Crea un pool de conexiones Oracle."""
         try:
             self.pool = oracledb.create_pool(
                 user=self.db_user,
@@ -278,12 +249,7 @@ class Oradb:
             raise ConnectionError("Error al crear el pool de conexiones: " + str(e))
 
     def close_connection(self):
-        """
-        Cierra la conexión activa.
-
-        Returns:
-            None
-        """
+        """Cierra la conexión activa."""
         if self.connection is not None:
             if self.transaction and self.pool is not None:
                 self.pool.release(self.connection)
@@ -293,16 +259,7 @@ class Oradb:
             self.transaction = False
 
     def connect(self, transaction=False):
-        """
-        Establece una conexión utilizando el pool de conexiones si es una transacción,
-        o una conexión directa si no es una transacción.
-
-        Returns:
-            None
-
-        Raises:
-            ConnectionError: Si ocurre un error al establecer la conexión.
-        """
+        """Establece una conexión."""
         try:
             if transaction:
                 if self.pool is None:
@@ -320,55 +277,24 @@ class Oradb:
             raise ConnectionError("Error al establecer la conexión: " + str(e))
 
     def commit(self):
-        """
-        Realiza un commit en la conexión activa.
-
-        Returns:
-            None
-        """
         if self.connection is not None:
             self.connection.commit()
 
     def rollback(self):
-        """
-        Realiza un rollback en la conexión activa.
-
-        Returns:
-            None
-        """
         if self.connection is not None:
             self.connection.rollback()
 
     def begin_transaction(self):
-        """
-        Inicia una transacción de base de datos, esto abre la conexión a la base
-        de datos y la mantiene así hasta que se ejecute un commit o rollback
-
-        Returns:
-            None
-        """
         if self.connection is None:
             self.connect(transaction=True)
             self.connection.begin()
 
     def commit_transaction(self):
-        """
-        Confirma las transacciones ejecutadas en la base de datos y cierra la conexión
-
-        Returns:
-            None
-        """
         if self.connection is not None:
             self.connection.commit()
             self.close_connection()
 
     def rollback_transaction(self):
-        """
-        Revierte las transacciones ejecutadas en la base de datos y cierra la conexión
-
-        Returns:
-            None
-        """
         if self.connection is not None:
             self.connection.rollback()
             self.close_connection()
@@ -376,24 +302,7 @@ class Oradb:
     def execute_procedure(
             self, procedure_name: str, params: List[dict]
     ) -> Union[dict, None]:
-        """
-        Ejecuta un procedimiento almacenado en Oracle con los parámetros proporcionados.
-
-        Args:
-            procedure_name (str): Nombre del procedimiento almacenado a ejecutar.
-            params (List[dict]): Lista de diccionarios que contienen información de los parámetros.
-                Cada diccionario debe contener las siguientes claves:
-                - "nombre": Nombre del parámetro.
-                - "valor": Valor del parámetro.
-                - "tipo": Tipo de dato del parámetro (debe ser uno de los valores definidos en la clase ODBType).
-                - "direccion": Dirección del parámetro (debe ser uno de los valores: "IN", "OUT", "IN/OUT").
-
-        Returns:
-            Union[dict, None]: Un diccionario con los valores de los parámetros de salida o None si ocurre un error.
-
-        Raises:
-            ConnectionError: Si ocurre un error al crear o establecer la conexión con la base de datos.
-        """
+        """Ejecuta un procedimiento almacenado en Oracle."""
         try:
             if not self.transaction:
                 self.connect()
@@ -404,7 +313,8 @@ class Oradb:
                 result = {}
                 for param in params:
                     key = f'out_{param["nombre"].lower()}'
-                    if param["tipo"] == oracledb.DB_TYPE_CURSOR:
+                    ora_type = ORACLE_TYPE_MAP.get(param["tipo"], param["tipo"])
+                    if ora_type == oracledb.DB_TYPE_CURSOR:
                         result[param["nombre"]] = self._process_cursor(ora_param.get(key))
                     elif param["direccion"] in ("OUT", "IN/OUT"):
                         if key in ora_param:
@@ -422,25 +332,7 @@ class Oradb:
     def execute_function(
             self, function_name: str, params: List[dict], type_function: str
     ) -> Union[dict, None]:
-        """
-        Ejecuta una función en Oracle con los parámetros proporcionados.
-
-        Args:
-            function_name (str): Nombre de la función a ejecutar.
-            params (List[dict]): Lista de diccionarios que contienen información de los parámetros.
-                Cada diccionario debe contener las siguientes claves:
-                - "nombre": Nombre del parámetro.
-                - "valor": Valor del parámetro.
-                - "tipo": Tipo de dato del parámetro (debe ser uno de los valores definidos en la clase ODBType).
-                - "direccion": Dirección del parámetro (debe ser uno de los valores: "IN", "OUT", "IN/OUT").
-            type_function (str): Tipo de función a ejecutar NUMBER, STRING, SYS_REFCURSOR.
-
-        Returns:
-            Union[dict, None]: Un diccionario con los valores de retorno y los parámetros de salida o None si ocurre un error.
-
-        Raises:
-            ConnectionError: Si ocurre un error al crear o establecer la conexión con la base de datos.
-        """
+        """Ejecuta una función en Oracle con los parámetros proporcionados."""
         config = _FUNCTION_TYPES.get(type_function)
         if config is None:
             raise ValueError(f"Tipo de función no soportado: {type_function}")
@@ -450,12 +342,15 @@ class Oradb:
                 self.connect()
             with self.connection.cursor() as cursor:
                 send_param, ora_param = self._bind_params(cursor, params)
-                retval = cursor.callfunc(function_name, config["cursor_type"], send_param)
-
+                retval = cursor.callfunc(
+                    name=function_name,
+                    return_type=config["cursor_type"],
+                    parameters=send_param)
                 result = {}
                 for param in params:
                     key = f'out_{param["nombre"].lower()}'
-                    if param["tipo"] == oracledb.DB_TYPE_CURSOR:
+                    ora_type = ORACLE_TYPE_MAP.get(param["tipo"], param["tipo"])
+                    if ora_type == oracledb.DB_TYPE_CURSOR:
                         result[param["nombre"]] = self._process_cursor(ora_param.get(key))
                     elif param["direccion"] in ("OUT", "IN/OUT"):
                         if key in ora_param:
@@ -465,7 +360,10 @@ class Oradb:
                     cursor_results = self.process_sys_refcursor(retval)
                 else:
                     cursor_results = config["default_retval"] if retval is None else retval
-                return {config["retval_key"]: cursor_results, **result}
+                return {
+                    config["retval_key"]: cursor_results,
+                    **result
+                }
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
@@ -476,9 +374,7 @@ class Oradb:
                 self.close_connection()
 
     def execute_query(self, query: str, params: List[dict]) -> Union[List[dict], None]:
-        """
-        Ejecuta una consulta SQL en Oracle con los parámetros proporcionados.
-        """
+        """Ejecuta una consulta SQL en Oracle."""
         try:
             if not self.transaction:
                 self.connect()
@@ -508,25 +404,7 @@ class Oradb:
     def execute_query_with_transaction(
             self, query: str, params: List[dict]
     ) -> Union[List[dict], None]:
-        """
-        Ejecuta una consulta SQL en Oracle con los parámetros proporcionados dentro de una transacción.
-
-        Args:
-            query (str): Consulta SQL a ejecutar.
-            params (List[dict]): Lista de diccionarios que contienen información de los parámetros.
-                Cada diccionario debe contener las siguientes claves:
-                - "nombre": Nombre del parámetro.
-                - "valor": Valor del parámetro.
-                - "tipo": Tipo de dato del parámetro (debe ser uno de los valores definidos en la clase ODBType).
-                - "direccion": Dirección del parámetro (debe ser uno de los valores: "IN", "OUT", "IN/OUT").
-
-        Returns:
-            Union[List[dict], None]: Una lista de diccionarios que representa las filas resultantes de la consulta,
-            o None si ocurre un error.
-
-        Raises:
-            ConnectionError: Si ocurre un error al crear o establecer la conexión con la base de datos.
-        """
+        """Ejecuta una consulta SQL en Oracle dentro de una transacción."""
         try:
             self.begin_transaction()
 
@@ -544,12 +422,7 @@ class Oradb:
             self.commit_transaction()
 
     def disconnect(self):
-        """
-        Cierra la conexión del pool de conexiones.
-
-        Returns:
-            None
-        """
+        """Cierra el pool de conexiones."""
         if self.pool is not None:
             self.pool.close()
             self.pool = None
