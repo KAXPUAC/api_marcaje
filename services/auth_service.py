@@ -44,7 +44,8 @@ def login_api(username: str, password: str):
                     print(f"Datos del usuario para token: {user_data}")
 
                     token = create_access_token(data=user_data)
-                    return {"access_token": token, "token_type": "bearer"}
+                    return {"access_token": token, "token_type": "bearer", "username": username,
+                            "email": get_user.get("Gmail")}
                 else:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
