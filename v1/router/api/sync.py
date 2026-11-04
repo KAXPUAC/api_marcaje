@@ -1,3 +1,5 @@
+from services.auth_service import get_current_user
+from fastapi import Depends
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException
 from oracleug.models.dynamics import Dynamics
@@ -22,6 +24,7 @@ async def sync_departamento(coddepa: str):
         logger.error(message)
         raise HTTPException(status_code=500, detail=str(message))
 
+
 @router.post("/departamento/{coddepa}/status/")
 async def status_departamento(coddepa: str):
     """Verifica si la collection existe y cuántas caras tiene."""
@@ -41,6 +44,7 @@ async def status_departamento(coddepa: str):
 
 
 @router.get("/departamentos")
+#async def get_departamentos(current_user: dict = Depends(get_current_user)):
 async def get_departamentos():
     """Obtiene la lista de departamentos de Oracle"""
     try:

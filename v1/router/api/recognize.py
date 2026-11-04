@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from services.auth_service import get_current_user
 from oracleug.scripts.empleados import Empleados
 from services.rekognition_service import RekognitionService
 from schemas.recognize import RecognizeResponse
@@ -10,7 +11,8 @@ router = APIRouter(prefix="/recognize", tags=["Reconocimiento Facial"])
 
 
 @router.post("", response_model=RecognizeResponse)
-async def recognize_face(file: UploadFile = File(..., description="Imagen JPG/PNG"),
+async def recognize_face(current_user: dict = Depends(get_current_user),
+                         file: UploadFile = File(..., description="Imagen JPG/PNG"),
                          departamento: str = Form(..., description="Código de departamento (CODDEPA)")):
     """
     Reconoce un rostro comparando contra la collection Rekognition del departamento.
