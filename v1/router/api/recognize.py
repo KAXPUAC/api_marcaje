@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
-from services.auth_service import get_current_user
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
+from services.auth_service import facial_login, get_current_user
 from oracleug.scripts.empleados import Empleados
 from services.rekognition_service import RekognitionService
 from schemas.recognize import RecognizeResponse
+from schemas.auth import TokenResponse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -56,8 +57,8 @@ async def recognize_face(current_user: dict = Depends(get_current_user),
         raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")
 
 
-@router.post("/automatic", response_model=RecognizeResponse)
-async def recognize_face_automatic(current_user: dict = Depends(get_current_user),
+@router.post("/automatic", response_model=TokenResponse)
+async def recognize_face_automatic(request: Request,
                                    file: UploadFile = File(..., description="Imagen JPG/PNG")):
     """Reconoce un rostro buscando en todos los departamentos indexados."""
     if not file.content_type or not file.content_type.startswith('image/'):
@@ -74,20 +75,19 @@ async def recognize_face_automatic(current_user: dict = Depends(get_current_user
         )
 
         if not match:
-            return RecognizeResponse(
-                success=False,
-                message="No se encontró coincidencia en los departamentos indexados"
+            raise HTTPException(
+                status_code=401,
+                detail="No se encontró coincidencia en los departamentos indexados",
             )
 
-        return RecognizeResponse(
-            success=True,
-            departamento=match["departamento"],
+        response = facial_login(
             correlativo=match["external_image_id"],
-            similarity=match["similarity"],
-            face_id=match["face_id"],
-            confidence=match["confidence"]
+            ip=request.state.client_ip,
         )
+        return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error en reconocimiento automático: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 
 
 class LoginRequest(BaseModel):
@@ -13,8 +13,11 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_expires_in: int
     username: str
-    email: str
+    email: Optional[str] = None
     token_type: str = "bearer"
+    correlativo: Optional[str] = None
+    auth_method: str
+    datos_usuario: Optional[dict[str, Any]] = None
 
 
 class RefreshTokenRequest(BaseModel):

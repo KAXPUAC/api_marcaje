@@ -1,7 +1,7 @@
 import hashlib
 
 from oracleug.models.pkg_ci import PkgCi
-from oracleug.scripts.usuarios import Usuarios
+from oracleug.scripts.empleados import Empleados
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
 from oracleug.security import (
@@ -18,7 +18,7 @@ from oracleug.oracle_settings import OracleSettings
 logger = logging.getLogger(__name__)
 
 __pkg_ci = PkgCi()
-__usuarios = Usuarios()
+__empleados = Empleados()
 __oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 __settings = OracleSettings()
 
@@ -53,7 +53,22 @@ def _revoke_refresh_token(payload: dict) -> None:
         __active_refresh_tokens.pop(jti, None)
 
 
-def _token_response(access_token: str, refresh_token: str, username: str, email: str):
+def _get_value(data: dict, *names: str, default=None):
+    """Obtiene un campo independientemente de las mayúsculas de Oracle."""
+    for name in names:
+        if name in data:
+            return data[name]
+    normalized = {str(key).upper(): value for key, value in data.items()}
+    for name in names:
+        if name.upper() in normalized:
+            return normalized[name.upper()]
+    return default
+
+
+def _token_response(access_token: str, refresh_token: str, user: dict, auth_method: str):
+    username = str(_get_value(user, "USUARIO", "username", default=""))
+    email = _get_value(user, "EMAIL", "GMAIL", "email")
+    correlativo = _get_value(user, "CORRELATIVO", "correlativo")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -62,7 +77,26 @@ def _token_response(access_token: str, refresh_token: str, username: str, email:
         "token_type": "bearer",
         "username": username,
         "email": email,
+        "correlativo": str(correlativo) if correlativo is not None else None,
+        "auth_method": auth_method,
+        "datos_usuario": user,
     }
+
+
+def _create_auth_tokens(user: dict, auth_method: str):
+    username = str(_get_value(user, "USUARIO", "username", default=""))
+    email = _get_value(user, "EMAIL", "GMAIL", "email")
+    correlativo = _get_value(user, "CORRELATIVO", "correlativo")
+    user_data = {
+        "username": username,
+        "email": email,
+        "correlativo": correlativo,
+        "auth_method": auth_method,
+    }
+    access_token = create_access_token(data=user_data)
+    refresh_token = create_refresh_token(data=user_data)
+    _register_refresh_token(refresh_token)
+    return _token_response(access_token, refresh_token, user, auth_method)
 
 
 def login_api(username: str, password: str, ip: str = "0.0.0.0"):
@@ -75,7 +109,7 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
     """
     try:
         logger.info("Solicitud de autenticación para %s desde %s", username, ip)
-        get_user = __usuarios.get_usuario_adm(usuario=username)
+        get_user = __empleados.get_usuario_o_correlativo(usuario=username.upper())
 
         if len(get_user) == 0:
             raise HTTPException(
@@ -90,15 +124,7 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
             user_info = __pkg_ci.autenticar_administrativo(usuario=username.upper(), contrasena=contrasena)
             if 'RETORNO_FUNCION' in user_info:
                 if user_info["RETORNO_FUNCION"] == 1:
-                    user_data = {
-                        "username": username,
-                        "email": get_user.get("Gmail"),
-                    }
-
-                    token = create_access_token(data=user_data)
-                    refresh_token = create_refresh_token(data=user_data)
-                    _register_refresh_token(refresh_token)
-                    return _token_response(token, refresh_token, username, get_user.get("Gmail"))
+                    return _create_auth_tokens(get_user, "password")
                 else:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -135,14 +161,29 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
         )
 
     username = payload["username"]
-    email = payload.get("email", "")
-    user_data = {"username": username, "email": email}
+    user = __empleados.get_usuario_o_correlativo(usuario=username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     logger.info("Renovación de token para %s desde %s", username, ip)
-    access_token = create_access_token(data=user_data)
-    new_refresh_token = create_refresh_token(data=user_data)
     _revoke_refresh_token(payload)
-    _register_refresh_token(new_refresh_token)
-    return _token_response(access_token, new_refresh_token, username, email)
+    response = _create_auth_tokens(user[0], payload.get("auth_method", "password"))
+    return response
+
+
+def facial_login(correlativo: str, ip: str = "0.0.0.0"):
+    """Genera tokens usando el usuario asociado al correlativo reconocido."""
+    users = __empleados.get_usuario_o_correlativo(correlativo=int(correlativo))
+    if not users:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El rostro fue reconocido, pero no tiene un usuario activo asociado",
+        )
+    logger.info("Autenticación facial para correlativo %s desde %s", correlativo, ip)
+    return _create_auth_tokens(users[0], "facial")
 
 
 def logout(refresh_token: str) -> None:

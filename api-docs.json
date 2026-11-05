@@ -141,7 +141,7 @@
             "name": "Obtener usuario autenticado",
             "method": "GET",
             "path": "/api/v1/users/me",
-            "authentication_required": true,
+            "authentication_required": false,
             "parameters": [],
             "request": null,
             "response": {
@@ -294,7 +294,7 @@
             "name": "Reconocer rostro automáticamente",
             "method": "POST",
             "path": "/api/v1/recognize/automatic",
-            "authentication_required": true,
+            "authentication_required": false,
             "content_type": "multipart/form-data",
             "parameters": [
                 {
@@ -311,16 +311,18 @@
             "response": {
                 "status": 200,
                 "content_type": "application/json",
-                "type": "RecognizeResponse",
+                "type": "TokenResponse",
                 "body": {
-                    "success": true,
-                    "departamento": "ADM",
+                    "access_token": "eyJ...",
+                    "refresh_token": "eyJ...",
+                    "expires_in": 1800,
+                    "refresh_expires_in": 2592000,
+                    "token_type": "bearer",
+                    "username": "usuario",
+                    "email": "usuario@example.com",
                     "correlativo": "12345",
-                    "datos_info": null,
-                    "similarity": 96.5,
-                    "face_id": "face-id",
-                    "confidence": 99.1,
-                    "message": null
+                    "auth_method": "facial",
+                    "datos_usuario": {}
                 }
             }
         },
