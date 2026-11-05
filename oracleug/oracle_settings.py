@@ -30,6 +30,7 @@ class OracleSettings:
             self.__secret_key: str = os.getenv("SECRET_KEY_UG", "")
             self.__algorithm: str = os.getenv("ALGORITHM", "HS256")
             self.__access_token_expire_minutes: int = to_int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", '60'))
+            self.__refresh_token_expire_days: int = to_int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", '30'))
 
         except Exception as e:
             raise Exception(f"Error al cargar las configuraciones de Oracle: {e}")
@@ -42,3 +43,6 @@ class OracleSettings:
 
     def get_access_token_expire_minutes(self) -> int:
         return self.__access_token_expire_minutes
+
+    def get_refresh_token_expire_days(self) -> int:
+        return self.__refresh_token_expire_days

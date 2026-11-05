@@ -4,7 +4,12 @@ from oracleug.models.pkg_ci import PkgCi
 from oracleug.scripts.usuarios import Usuarios
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
-from oracleug.security import create_access_token, decode_access_token
+from oracleug.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    decode_refresh_token,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -46,7 +51,9 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
                     print(f"Datos del usuario para token: {user_data}")
 
                     token = create_access_token(data=user_data)
-                    return {"access_token": token, "token_type": "bearer", "username": username,
+                    refresh_token = create_refresh_token(data=user_data)
+                    return {"access_token": token, "refresh_token": refresh_token,
+                            "token_type": "bearer", "username": username,
                             "email": get_user.get("Gmail")}
                 else:
                     raise HTTPException(
@@ -71,6 +78,29 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
         # Manejo de errores y logging
         print(f"Error during authentication: {e}")
         return None
+
+
+def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
+    """Genera un nuevo par de tokens a partir de un refresh token válido."""
+    payload = decode_refresh_token(refresh_token)
+    if payload is None or not payload.get("username"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    username = payload["username"]
+    email = payload.get("email", "")
+    user_data = {"username": username, "email": email}
+    logger.info("Renovación de token para %s desde %s", username, ip)
+    return {
+        "access_token": create_access_token(data=user_data),
+        "refresh_token": create_refresh_token(data=user_data),
+        "token_type": "bearer",
+        "username": username,
+        "email": email,
+    }
 
 
 async def get_current_user(token: str = Depends(__oauth2_scheme)) -> dict:
