@@ -17,7 +17,7 @@ class Empleados:
                 FROM DBAFISICC.CACARNETBITB
                 WHERE CORRELATIVO = :1"""
 
-    # Nuevo script optimizado con UNION ALL para aprovechar índices según el parámetro provisto
+    # Mapeo posicional explícito (:1 a :5) para evitar el error DPY-4009
     __usuario_o_correlativo = """
                               SELECT B.CODPERS,
                                      A.USUARIO,
@@ -30,11 +30,11 @@ class Empleados:
                                      A.CORRELATIVO
                               FROM DBAFISICC.CACARNETUSUARIOTB A
                                        JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
-                              WHERE A.CORRELATIVO = :correlativo
-                                AND :correlativo IS NOT NULL
-                                AND A.TIPO = 1
-                                AND A.ACTIVO = 1
-                                AND B.STATUS <> 'B'
+                              WHERE A.CORRELATIVO = :1
+           AND :2 IS NOT NULL
+           AND A.TIPO = 1
+           AND A.ACTIVO = 1
+           AND B.STATUS <> 'B'
 
                               UNION ALL
 
@@ -49,12 +49,12 @@ class Empleados:
                                      A.CORRELATIVO
                               FROM DBAFISICC.CACARNETUSUARIOTB A
                                        JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
-                              WHERE A.USUARIO = :usuario
-                                AND :correlativo IS NULL
-                                AND :usuario IS NOT NULL
-                                AND A.TIPO = 1
-                                AND A.ACTIVO = 1
-                                AND B.STATUS <> 'B' \
+                              WHERE A.USUARIO = :3
+           AND :4 IS NULL
+           AND :5 IS NOT NULL
+           AND A.TIPO = 1
+           AND A.ACTIVO = 1
+           AND B.STATUS <> 'B' \
                               """
 
     def __init__(self):
@@ -83,21 +83,21 @@ class Empleados:
 
     def get_usuario_o_correlativo(self, correlativo: int = None, usuario: str = None):
         """
-        Busca un usuario por correlativo o por nombre de usuario.
-        Se puede enviar cualquiera de los dos parámetros.
+        Busca un usuario por correlativo o por nombre de usuario enviando los 5 bindings posicionales.
         """
+        val_correlativo = int(correlativo) if correlativo is not None else None
+
         parametros = [
-            {
-                "nombre": "correlativo",
-                "valor": int(correlativo) if correlativo is not None else None,
-                "tipo": ODBType.INT,
-                "direccion": "IN",
-            },
-            {
-                "nombre": "usuario",
-                "valor": usuario,
-                "tipo": ODBType.VARCHAR2,
-                "direccion": "IN",
-            }
+            # :1 -> A.CORRELATIVO = :1
+            {"nombre": "correlativo1", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
+            # :2 -> AND :2 IS NOT NULL
+            {"nombre": "correlativo2", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
+            # :3 -> A.USUARIO = :3
+            {"nombre": "usuario1", "valor": usuario, "tipo": ODBType.VARCHAR2, "direccion": "IN"},
+            # :4 -> AND :4 IS NULL
+            {"nombre": "correlativo3", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
+            # :5 -> AND :5 IS NOT NULL
+            {"nombre": "usuario2", "valor": usuario, "tipo": ODBType.VARCHAR2, "direccion": "IN"},
         ]
+
         return self.__con.execute_query(query=self.__usuario_o_correlativo, params=parametros)
