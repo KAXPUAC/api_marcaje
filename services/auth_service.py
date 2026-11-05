@@ -14,14 +14,16 @@ __usuarios = Usuarios()
 __oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-def login_api(username: str, password: str):
+def login_api(username: str, password: str, ip: str = "0.0.0.0"):
     """
     Método para autenticar a un usuario en el sistema.
     :param username: Nombre de usuario.
     :param password: Contraseña del usuario.
+    :param ip: IP del cliente que solicita la autenticación.
     :return: Diccionario con información del usuario si la autenticación es exitosa, None en caso contrario.
     """
     try:
+        logger.info("Solicitud de autenticación para %s desde %s", username, ip)
         get_user = __usuarios.get_usuario_adm(usuario=username)
 
         if len(get_user) == 0:

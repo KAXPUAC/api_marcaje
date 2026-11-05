@@ -1,10 +1,18 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from v1.router.api import sync, recognize, auth, people
 from services.auth_service import login_api
 from schemas.auth import TokenResponse
+from services.request_service import get_client_ip
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def set_client_ip(request: Request, call_next):
+    """Deja la IP disponible en todas las peticiones GET y POST."""
+    request.state.client_ip = get_client_ip(request)
+    return await call_next(request)
 
 
 @app.get("/health")
@@ -13,8 +21,8 @@ def health_check():
 
 
 @app.post("/token", response_model=TokenResponse)
-async def get_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    return login_api(form_data.username, form_data.password)
+async def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+    return login_api(username=form_data.username, password=form_data.password, ip=request.state.client_ip)
 
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Autenticación"])
