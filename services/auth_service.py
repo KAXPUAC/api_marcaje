@@ -55,6 +55,8 @@ def _revoke_refresh_token(payload: dict) -> None:
 
 def _get_value(data: dict, *names: str, default=None):
     """Obtiene un campo independientemente de las mayúsculas de Oracle."""
+    if not isinstance(data, dict):
+        return default
     for name in names:
         if name in data:
             return data[name]
@@ -63,6 +65,15 @@ def _get_value(data: dict, *names: str, default=None):
         if name.upper() in normalized:
             return normalized[name.upper()]
     return default
+
+
+def _get_first_user(result):
+    """Normaliza una fila devuelta por Oracle como dict o lista de dicts."""
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, list) and result:
+        return result[0] if isinstance(result[0], dict) else None
+    return None
 
 
 def _token_response(access_token: str, refresh_token: str, user: dict, auth_method: str):
@@ -107,47 +118,48 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
     :param ip: IP del cliente que solicita la autenticación.
     :return: Diccionario con información del usuario si la autenticación es exitosa, None en caso contrario.
     """
+    logger.info("Solicitud de autenticación para %s desde %s", username, ip)
+
     try:
-        logger.info("Solicitud de autenticación para %s desde %s", username, ip)
-        get_user = __empleados.get_usuario_o_correlativo(usuario=username.upper())
+        users = __empleados.get_usuario_o_correlativo(usuario=username.strip().upper())
+    except Exception:
+        logger.exception("Error consultando el usuario %s", username)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error consultando la información del usuario",
+        )
 
-        if len(get_user) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
-        else:
-            get_user = get_user[0]
+    user = _get_first_user(users)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
 
-        try:
-            contrasena = hashlib.sha512(str(password).encode("UTF-8")).hexdigest().upper()
-            user_info = __pkg_ci.autenticar_administrativo(usuario=username.upper(), contrasena=contrasena)
-            if 'RETORNO_FUNCION' in user_info:
-                if user_info["RETORNO_FUNCION"] == 1:
-                    return _create_auth_tokens(get_user, "password")
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                    )
+    usuario_db = str(_get_value(user, "USUARIO", "username", default=username)).upper()
+    contrasena = hashlib.sha512(str(password).encode("UTF-8")).hexdigest().upper()
 
-            if 'OOPS' in user_info:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Credenciales inválidas",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+    try:
+        user_info = __pkg_ci.autenticar_administrativo(
+            usuario=usuario_db,
+            contrasena=contrasena,
+        )
+    except Exception:
+        logger.exception("Error autenticando al usuario %s", usuario_db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error durante la autenticación",
+        )
 
-        except:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    retorno = _get_value(user_info or {}, "RETORNO_FUNCION", "retorno_funcion")
+    if retorno != 1:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    except Exception as e:
-        # Manejo de errores y logging
-        print(f"Error during authentication: {e}")
-        return None
+    return _create_auth_tokens(user, "password")
 
 
 def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
@@ -162,6 +174,7 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
 
     username = payload["username"]
     user = __empleados.get_usuario_o_correlativo(usuario=username)
+    user = _get_first_user(user)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -170,20 +183,21 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
         )
     logger.info("Renovación de token para %s desde %s", username, ip)
     _revoke_refresh_token(payload)
-    response = _create_auth_tokens(user[0], payload.get("auth_method", "password"))
+    response = _create_auth_tokens(user, payload.get("auth_method", "password"))
     return response
 
 
 def facial_login(correlativo: str, ip: str = "0.0.0.0"):
     """Genera tokens usando el usuario asociado al correlativo reconocido."""
     users = __empleados.get_usuario_o_correlativo(correlativo=int(correlativo))
-    if not users:
+    user = _get_first_user(users)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="El rostro fue reconocido, pero no tiene un usuario activo asociado",
         )
     logger.info("Autenticación facial para correlativo %s desde %s", correlativo, ip)
-    return _create_auth_tokens(users[0], "facial")
+    return _create_auth_tokens(user, "facial")
 
 
 def logout(refresh_token: str) -> None:
