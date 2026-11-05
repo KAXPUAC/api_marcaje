@@ -20,4 +20,4 @@ async def get_token(form_data: OAuth2PasswordRequestForm = Depends()):
 app.include_router(auth.router, prefix="/api/v1", tags=["Autenticación"])
 app.include_router(recognize.router, prefix="/api/v1", tags=["Reconocimiento Facial"])
 app.include_router(sync.router, prefix="/api/v1", tags=["Sincronización"])
-app.include_router(people.router, prefix="/api/v1", tags=["People"])
+app.include_router(people.router, prefix="/api/v1", tags=["Colaboradores, Docentes"])

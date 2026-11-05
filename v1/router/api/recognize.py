@@ -54,3 +54,40 @@ async def recognize_face(current_user: dict = Depends(get_current_user),
     except Exception as e:
         logger.error(f"Error en reconocimiento: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")
+
+
+@router.post("/automatic", response_model=RecognizeResponse)
+async def recognize_face_automatic(current_user: dict = Depends(get_current_user),
+                                   file: UploadFile = File(..., description="Imagen JPG/PNG")):
+    """Reconoce un rostro buscando en todos los departamentos indexados."""
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
+
+    image_bytes = await file.read()
+    if len(image_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+
+    try:
+        match = RekognitionService.buscar_rostro_en_todos_departamentos(
+            image_bytes=image_bytes,
+            umbral=90.0
+        )
+
+        if not match:
+            return RecognizeResponse(
+                success=False,
+                message="No se encontró coincidencia en los departamentos indexados"
+            )
+
+        return RecognizeResponse(
+            success=True,
+            departamento=match["departamento"],
+            correlativo=match["external_image_id"],
+            similarity=match["similarity"],
+            face_id=match["face_id"],
+            confidence=match["confidence"]
+        )
+
+    except Exception as e:
+        logger.error(f"Error en reconocimiento automático: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")

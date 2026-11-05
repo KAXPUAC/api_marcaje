@@ -56,6 +56,29 @@ class RekognitionService:
         }
 
     @classmethod
+    def buscar_rostro_en_todos_departamentos(cls, image_bytes: bytes, umbral: float = 90.0):
+        """Busca un rostro en todas las collections de departamentos existentes."""
+        paginator = rekognition.get_paginator('list_collections')
+
+        for page in paginator.paginate():
+            for collection_id in page.get('CollectionIds', []):
+                if not collection_id.startswith('depto_'):
+                    continue
+
+                departamento_id = collection_id[len('depto_'):]
+                match = cls.buscar_rostro_en_departamento(
+                    departamento_id=departamento_id,
+                    image_bytes=image_bytes,
+                    umbral=umbral
+                )
+
+                if match:
+                    match['departamento'] = departamento_id
+                    return match
+
+        return None
+
+    @classmethod
     def indexar_rostro(cls, departamento_id: str, image_bytes: bytes, correlativo: str) -> str:
         """Indexa una cara individual. Retorna FaceId."""
         collection_id = cls.obtener_nombre_coleccion(departamento_id)

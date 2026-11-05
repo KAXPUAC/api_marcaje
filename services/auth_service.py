@@ -33,7 +33,7 @@ def login_api(username: str, password: str):
             get_user = get_user[0]
 
         try:
-            contrasena = hashlib.sha512(password.encode()).hexdigest().upper()
+            contrasena = hashlib.sha512(str(password).encode("UTF-8")).hexdigest().upper()
             user_info = __pkg_ci.autenticar_administrativo(usuario=username.upper(), contrasena=contrasena)
             if 'RETORNO_FUNCION' in user_info:
                 if user_info["RETORNO_FUNCION"] == 1:

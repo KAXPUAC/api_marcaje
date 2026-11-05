@@ -25,3 +25,13 @@ class PkgPersonal:
         ]
         nombre_procedure = "DBAFISICC.PKG_PERSONAL.INGRESO_PERSONAL"
         return db.execute_function(nombre_procedure, parametros, type_function=ODBFunctionType.STRING)
+
+    def ingreso_docente(self, pcodpers: str, maquina: str, lab: str):
+        parametros = [
+            params('PCODPERS', pcodpers, types.VARCHAR2, direct.IN),
+            params('PMAQUINA', maquina, types.VARCHAR2, direct.IN),
+            params('PLUGAR', lab, types.NUMBER, direct.IN),
+            params('PUSUARIO', self.usuario, types.VARCHAR2, direct.IN),
+        ]
+        nombre_procedure = "DBAFISICC.PKG_PERSONAL.INGRESO_DOCENTE"
+        return db.execute_function(nombre_procedure, parametros, type_function=ODBFunctionType.STRING)

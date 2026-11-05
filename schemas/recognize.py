@@ -4,6 +4,7 @@ from typing import Optional
 
 class RecognizeResponse(BaseModel):
     success: bool
+    departamento: Optional[str] = None
     correlativo: Optional[str] = None
     datos_info: Optional[list[dict]] = None
     similarity: Optional[float] = None
