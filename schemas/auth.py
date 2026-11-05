@@ -10,6 +10,8 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
+    expires_in: int
+    refresh_expires_in: int
     username: str
     email: str
     token_type: str = "bearer"

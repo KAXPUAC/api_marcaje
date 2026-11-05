@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from services.auth_service import get_current_user
 from schemas.auth import RefreshTokenRequest, TokenResponse
-from services.auth_service import login_api, refresh_access_token
+from services.auth_service import login_api, logout, refresh_access_token
 
 router = APIRouter()
 
@@ -15,6 +15,12 @@ async def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Dep
 @router.post("/token/refresh", response_model=TokenResponse)
 async def refresh_token(request: Request, data: RefreshTokenRequest):
     return refresh_access_token(data.refresh_token, ip=request.state.client_ip)
+
+
+@router.post("/logout")
+async def logout_token(data: RefreshTokenRequest):
+    logout(data.refresh_token)
+    return {"message": "Sesión cerrada correctamente"}
 
 
 # 3. Ejemplo de ruta protegida

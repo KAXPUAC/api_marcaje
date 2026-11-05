@@ -1,0 +1,392 @@
+{
+    "name": "API Marcaje",
+    "version": "1.0.0",
+    "description": "Documentación de los endpoints disponibles para consumir la API.",
+    "base_url": "http://localhost:8000",
+    "api_prefix": "/api/v1",
+    "authentication": {
+        "type": "Bearer JWT",
+        "header": "Authorization: Bearer <access_token>",
+        "access_token_expires_in_seconds": 1800,
+        "refresh_token_expires_in_seconds": 2592000,
+        "renew_endpoint": "POST /api/v1/token/refresh",
+        "logout_endpoint": "POST /api/v1/logout"
+    },
+    "common_errors": {
+        "400": {
+            "content_type": "application/json",
+            "body": {
+                "detail": "Descripción del error"
+            }
+        },
+        "401": {
+            "content_type": "application/json",
+            "body": {
+                "detail": "Invalid authentication credentials"
+            },
+            "action": "Renovar el access_token usando el refresh_token."
+        },
+        "500": {
+            "content_type": "application/json",
+            "body": {
+                "detail": "Descripción del error interno"
+            }
+        }
+    },
+    "endpoints": [
+        {
+            "name": "Health check",
+            "method": "GET",
+            "path": "/health",
+            "authentication_required": false,
+            "parameters": [],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "status": "ok"
+                }
+            }
+        },
+        {
+            "name": "Iniciar sesión",
+            "method": "POST",
+            "path": "/api/v1/token",
+            "aliases": [
+                "/token"
+            ],
+            "authentication_required": false,
+            "content_type": "application/x-www-form-urlencoded",
+            "parameters": [
+                {
+                    "name": "username",
+                    "location": "form",
+                    "type": "string",
+                    "required": true
+                },
+                {
+                    "name": "password",
+                    "location": "form",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request_example": "username=usuario&password=clave",
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "access_token": "eyJ...",
+                    "refresh_token": "eyJ...",
+                    "expires_in": 1800,
+                    "refresh_expires_in": 2592000,
+                    "token_type": "bearer",
+                    "username": "usuario",
+                    "email": "usuario@example.com"
+                }
+            }
+        },
+        {
+            "name": "Renovar tokens",
+            "method": "POST",
+            "path": "/api/v1/token/refresh",
+            "aliases": [
+                "/token/refresh"
+            ],
+            "authentication_required": false,
+            "content_type": "application/json",
+            "request": {
+                "refresh_token": "eyJ..."
+            },
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "access_token": "eyJ...",
+                    "refresh_token": "eyJ...",
+                    "expires_in": 1800,
+                    "refresh_expires_in": 2592000,
+                    "token_type": "bearer",
+                    "username": "usuario",
+                    "email": "usuario@example.com"
+                }
+            },
+            "notes": [
+                "El refresh_token anterior queda invalidado después de una renovación exitosa.",
+                "Debe guardarse el nuevo refresh_token devuelto por la API."
+            ]
+        },
+        {
+            "name": "Cerrar sesión",
+            "method": "POST",
+            "path": "/api/v1/logout",
+            "aliases": [
+                "/logout"
+            ],
+            "authentication_required": false,
+            "content_type": "application/json",
+            "request": {
+                "refresh_token": "eyJ..."
+            },
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "message": "Sesión cerrada correctamente"
+                }
+            }
+        },
+        {
+            "name": "Obtener usuario autenticado",
+            "method": "GET",
+            "path": "/api/v1/users/me",
+            "authentication_required": true,
+            "parameters": [],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "message": "Acceso concedido",
+                    "user": {
+                        "username": "usuario",
+                        "email": "usuario@example.com",
+                        "exp": 1762345600,
+                        "token_type": "access"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Información de colaborador administrativo",
+            "method": "GET",
+            "path": "/api/v1/people/info_admin",
+            "authentication_required": true,
+            "parameters": [
+                {
+                    "name": "correlativo",
+                    "location": "query",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "array|object",
+                "body": "Respuesta de DBAFISICC.PKG_PEOPLE.DATOSNOPERSONALTB"
+            }
+        },
+        {
+            "name": "Información de docente",
+            "method": "GET",
+            "path": "/api/v1/people/info_doc",
+            "authentication_required": true,
+            "parameters": [
+                {
+                    "name": "correlativo",
+                    "location": "query",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "array|object",
+                "body": "Respuesta de DBAFISICC.PKG_PEOPLE.DATOSNOPERSONALTB"
+            }
+        },
+        {
+            "name": "Marcar ingreso de personal",
+            "method": "POST",
+            "path": "/api/v1/people/marcar",
+            "authentication_required": true,
+            "content_type": "application/x-www-form-urlencoded",
+            "parameters": [
+                {
+                    "name": "codpers",
+                    "location": "query",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "string|object",
+                "body": "Respuesta de DBAFISICC.PKG_PERSONAL.INGRESO_PERSONAL"
+            }
+        },
+        {
+            "name": "Marcar ingreso de docente",
+            "method": "POST",
+            "path": "/api/v1/people/marcar_doc",
+            "authentication_required": true,
+            "content_type": "application/x-www-form-urlencoded",
+            "parameters": [
+                {
+                    "name": "codpers",
+                    "location": "query",
+                    "type": "string",
+                    "required": true
+                },
+                {
+                    "name": "laboratorio",
+                    "location": "query",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "string|object",
+                "body": "Respuesta de DBAFISICC.PKG_PERSONAL.INGRESO_DOCENTE"
+            }
+        },
+        {
+            "name": "Reconocer rostro por departamento",
+            "method": "POST",
+            "path": "/api/v1/recognize",
+            "authentication_required": true,
+            "content_type": "multipart/form-data",
+            "parameters": [
+                {
+                    "name": "file",
+                    "location": "multipart",
+                    "type": "file",
+                    "required": true,
+                    "accepted_types": [
+                        "image/jpeg",
+                        "image/png"
+                    ]
+                },
+                {
+                    "name": "departamento",
+                    "location": "multipart",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "RecognizeResponse",
+                "body": {
+                    "success": true,
+                    "departamento": "ADM",
+                    "correlativo": "12345",
+                    "datos_info": [],
+                    "similarity": 96.5,
+                    "face_id": "face-id",
+                    "confidence": 99.1,
+                    "message": null
+                }
+            }
+        },
+        {
+            "name": "Reconocer rostro automáticamente",
+            "method": "POST",
+            "path": "/api/v1/recognize/automatic",
+            "authentication_required": true,
+            "content_type": "multipart/form-data",
+            "parameters": [
+                {
+                    "name": "file",
+                    "location": "multipart",
+                    "type": "file",
+                    "required": true,
+                    "accepted_types": [
+                        "image/jpeg",
+                        "image/png"
+                    ]
+                }
+            ],
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "RecognizeResponse",
+                "body": {
+                    "success": true,
+                    "departamento": "ADM",
+                    "correlativo": "12345",
+                    "datos_info": null,
+                    "similarity": 96.5,
+                    "face_id": "face-id",
+                    "confidence": 99.1,
+                    "message": null
+                }
+            }
+        },
+        {
+            "name": "Sincronizar departamento",
+            "method": "POST",
+            "path": "/api/v1/sync/departamento/{coddepa}/",
+            "authentication_required": false,
+            "parameters": [
+                {
+                    "name": "coddepa",
+                    "location": "path",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "object|array",
+                "body": "Resultado de la sincronización del departamento"
+            }
+        },
+        {
+            "name": "Estado del departamento",
+            "method": "POST",
+            "path": "/api/v1/sync/departamento/{coddepa}/status/",
+            "authentication_required": false,
+            "parameters": [
+                {
+                    "name": "coddepa",
+                    "location": "path",
+                    "type": "string",
+                    "required": true
+                }
+            ],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "Coleccion": "depto_adm",
+                    "Cantidad Rostros": 10,
+                    "Creado": "2026-01-01 12:00:00"
+                },
+                "not_found_body": {
+                    "collection_id": "depto_adm",
+                    "face_count": 0,
+                    "exists": false
+                }
+            }
+        },
+        {
+            "name": "Listar departamentos",
+            "method": "GET",
+            "path": "/api/v1/sync/departamentos",
+            "authentication_required": false,
+            "parameters": [],
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "array",
+                "body": "Lista de departamentos obtenida desde Oracle"
+            }
+        }
+    ]
+}

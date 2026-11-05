@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import uuid4
 from jose import jwt, JWTError
 from oracleug.oracle_settings import OracleSettings
 
@@ -21,7 +22,7 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(days=settings.get_refresh_token_expire_days())
     )
-    to_encode.update({"exp": expire, "token_type": "refresh"})
+    to_encode.update({"exp": expire, "token_type": "refresh", "jti": str(uuid4())})
     return jwt.encode(to_encode, settings.get_secret_key(), algorithm=settings.get_algorithm())
 
 
