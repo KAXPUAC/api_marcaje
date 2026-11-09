@@ -187,7 +187,7 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
     return response
 
 
-def facial_login(correlativo: str, ip: str = "0.0.0.0"):
+def facial_login(correlativo: str, ip: str = "0.0.0.0", auth_method: str = "facial"):
     """Genera tokens usando el usuario asociado al correlativo reconocido."""
     users = __empleados.get_usuario_o_correlativo(correlativo=int(correlativo))
     user = _get_first_user(users)
@@ -197,7 +197,7 @@ def facial_login(correlativo: str, ip: str = "0.0.0.0"):
             detail="El rostro fue reconocido, pero no tiene un usuario activo asociado",
         )
     logger.info("Autenticación facial para correlativo %s desde %s", correlativo, ip)
-    return _create_auth_tokens(user, "facial")
+    return _create_auth_tokens(user, auth_method)
 
 
 def logout(refresh_token: str) -> None:

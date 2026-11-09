@@ -24,6 +24,14 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class LivenessSessionResponse(BaseModel):
+    session_id: str
+
+
+class LivenessRequest(BaseModel):
+    session_id: str
+
+
 class UserPayload(BaseModel):
     username: str
     user_id: Optional[int] = None

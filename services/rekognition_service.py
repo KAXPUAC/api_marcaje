@@ -8,6 +8,23 @@ rekognition = aws_settings.rekognition()
 
 
 class RekognitionService:
+    @classmethod
+    def crear_sesion_liveness(cls) -> str:
+        """Crea una sesión para Amazon Rekognition Face Liveness."""
+        response = rekognition.create_face_liveness_session()
+        return response["SessionId"]
+
+    @classmethod
+    def obtener_resultado_liveness(cls, session_id: str) -> dict:
+        """Obtiene el resultado server-side de una sesión de Face Liveness."""
+        response = rekognition.get_face_liveness_session_results(SessionId=session_id)
+        reference_image = response.get("ReferenceImage") or {}
+        return {
+            "status": response.get("Status"),
+            "confidence": response.get("Confidence"),
+            "reference_image": reference_image.get("Bytes"),
+        }
+
     @staticmethod
     def obtener_nombre_coleccion(departamento_id: str) -> str:
         return f"depto_{departamento_id.lower().strip()}"
