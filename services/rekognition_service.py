@@ -43,13 +43,24 @@ class RekognitionService:
                 raise
 
     @classmethod
-    def buscar_rostro_en_departamento(cls, departamento_id: str, image_bytes: bytes, umbral: float = 90.0):
+    def buscar_rostro_en_departamento(
+            cls, departamento_id: str, image_bytes: bytes, umbral: float = 90.0,
+            crear_collection: bool = True
+    ):
         """
         Busca un rostro en la collection del departamento.
         Retorna dict con: external_image_id (correlativo), similarity, face_id
         """
         collection_id = cls.obtener_nombre_coleccion(departamento_id)
-        cls.asegurar_collection_existe(collection_id)
+        if crear_collection:
+            cls.asegurar_collection_existe(collection_id)
+        else:
+            try:
+                rekognition.describe_collection(CollectionId=collection_id)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                    return None
+                raise
 
         response = rekognition.search_faces_by_image(
             CollectionId=collection_id,
