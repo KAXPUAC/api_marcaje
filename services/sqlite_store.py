@@ -71,6 +71,11 @@ class SQLiteStore:
                 (now,),
             )
 
+    def check_health(self) -> bool:
+        with self._connect() as connection:
+            result = connection.execute("PRAGMA quick_check").fetchone()
+        return bool(result and result[0] == "ok")
+
     def register_refresh_token(self, jti: str, expires_at: int) -> None:
         self.cleanup_expired()
         with self._connect() as connection:
