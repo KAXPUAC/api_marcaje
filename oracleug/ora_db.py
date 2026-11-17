@@ -1,6 +1,6 @@
 import base64
 import oracledb
-from typing import List, Union
+from typing import Any, List, Union
 
 from oracleug.oracle_settings import OracleSettings
 
@@ -103,6 +103,20 @@ class Oradb:
         palabras = texto.split("_")
         return "_".join(palabra.capitalize() for palabra in palabras)
 
+    def normalize_oracle_response(self, value: Any) -> Any:
+        """Normaliza recursivamente las llaves provenientes de Oracle."""
+        if isinstance(value, dict):
+            return {
+                self.convert_camel_case(str(key)) if isinstance(key, str) else key:
+                self.normalize_oracle_response(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [self.normalize_oracle_response(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self.normalize_oracle_response(item) for item in value)
+        return value
+
     def process_sys_refcursor(self, sys_refcursor):
         """Procesa un objeto SYS_REFCURSOR y devuelve una lista de diccionarios."""
         header = [self.convert_camel_case(col[0]) for col in sys_refcursor.description]
@@ -115,7 +129,7 @@ class Oradb:
                     col_value = col_value.read()
                 row_dict[col_name] = col_value
             cursor_results.append(row_dict)
-        return cursor_results
+        return self.normalize_oracle_response(cursor_results)
 
     @staticmethod
     def _convert_value(value):
@@ -129,10 +143,11 @@ class Oradb:
     def _read_rows(self, cursor) -> List[dict]:
         """Lee las filas de un cursor y las devuelve como lista de diccionarios."""
         header = [self.convert_camel_case(col[0]) for col in cursor.description]
-        return [
+        rows = [
             {header[i]: self._convert_value(row[i]) for i in range(len(header))}
             for row in cursor
         ]
+        return self.normalize_oracle_response(rows)
 
     def _process_cursor(self, cursor_var) -> List[dict]:
         """Procesa una variable de cursor OUT y devuelve sus filas."""
@@ -142,7 +157,9 @@ class Oradb:
         if value is None:
             return []
         header = [self.convert_camel_case(col[0]) for col in value.description]
-        return [dict(zip(header, row)) for row in value.fetchall()]
+        return self.normalize_oracle_response(
+            [dict(zip(header, row)) for row in value.fetchall()]
+        )
 
     @staticmethod
     def _bind_params(cursor, params):
@@ -319,7 +336,7 @@ class Oradb:
                     elif param["direccion"] in ("OUT", "IN/OUT"):
                         if key in ora_param:
                             result[param["nombre"]] = ora_param[key].getvalue()
-                return result
+                return self.normalize_oracle_response(result)
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
@@ -360,10 +377,10 @@ class Oradb:
                     cursor_results = self.process_sys_refcursor(retval)
                 else:
                     cursor_results = config["default_retval"] if retval is None else retval
-                return {
+                return self.normalize_oracle_response({
                     config["retval_key"]: cursor_results,
                     **result
-                }
+                })
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
@@ -383,13 +400,13 @@ class Oradb:
                 cursor.execute(query, send_params)
 
                 if cursor.description:
-                    return self._read_rows(cursor)
+                    return self.normalize_oracle_response(self._read_rows(cursor))
 
                 if dynamic_vars:
                     out_results = {}
                     for name, var in zip(dynamic_var_names, dynamic_vars):
                         out_results[self.convert_camel_case(name)] = self._convert_value(var.getvalue())
-                    return [out_results]
+                    return self.normalize_oracle_response([out_results])
 
                 return None
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
@@ -413,7 +430,7 @@ class Oradb:
                 cursor.execute(query, send_params)
 
                 if cursor.description:
-                    return self._read_rows(cursor)
+                    return self.normalize_oracle_response(self._read_rows(cursor))
                 return None
         except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
             self.rollback_transaction()

@@ -50,8 +50,8 @@ async def get_departamentos():
     try:
         dynamics = Dynamics()
         deptos = dynamics.obtener_departamentos()
-        if "RETVAL" in deptos:
-            return deptos["RETVAL"]
+        if "Retval" in deptos:
+            return deptos["Retval"]
         else:
             message = "No se obtuvo la lista de departamentos"
             logger.error(message)
