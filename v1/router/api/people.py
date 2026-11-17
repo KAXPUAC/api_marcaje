@@ -5,11 +5,10 @@ from oracleug.scripts.empleados import Empleados
 from services.auth_service import get_current_user
 from services.attendance_service import (
     build_attendance_response,
-    find_user_by_image,
-    get_liveness_image,
     get_user_type,
     get_value,
 )
+from services.recognition_service import find_user_data_by_image, get_liveness_image
 from schemas.people import (
     AdministrativeLivenessRequest,
     AttendanceResponse,
@@ -31,7 +30,7 @@ router = APIRouter(prefix="/people", tags=["Colaboradores, Docentes"])
             "entrada o salida de un usuario administrativo."
     ),
 )
-async def mark_administrative_attendance(
+def mark_administrative_attendance(
         request: Request,
         file: UploadFile = File(..., description="Imagen JPG/PNG"),
         departamento: str = Form(..., description="Código de departamento"),
@@ -40,12 +39,12 @@ async def mark_administrative_attendance(
     """Marca entrada o salida de un administrativo."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Archivo vacío")
 
     try:
-        usuario = find_user_by_image(image_bytes, departamento.strip())
+        usuario = find_user_data_by_image(image_bytes, departamento.strip())
         _, tipo_usuario = get_user_type(usuario, {1})
         resultado = PkgPersonal(
             usuario=str(current_user.get("username", "API")).upper(),
@@ -75,7 +74,7 @@ async def mark_administrative_attendance(
             "en el departamento indicado y registra su entrada o salida."
     ),
 )
-async def mark_administrative_attendance_liveness(
+def mark_administrative_attendance_liveness(
         request: Request,
         data: AdministrativeLivenessRequest,
         current_user: dict = Depends(get_current_user),
@@ -83,7 +82,7 @@ async def mark_administrative_attendance_liveness(
     """Valida liveness y marca entrada o salida de un administrativo."""
     try:
         image_bytes = get_liveness_image(data.session_id, "attendance_admin")
-        usuario = find_user_by_image(image_bytes, data.departamento.strip())
+        usuario = find_user_data_by_image(image_bytes, data.departamento.strip())
         _, tipo_usuario = get_user_type(usuario, {1})
         resultado = PkgPersonal(
             usuario=str(current_user.get("username", "API")).upper(),
@@ -113,7 +112,7 @@ async def mark_administrative_attendance_liveness(
             "o tutor y registra la entrada o salida en el laboratorio indicado."
     ),
 )
-async def mark_teacher_attendance(
+def mark_teacher_attendance(
         request: Request,
         file: UploadFile = File(..., description="Imagen JPG/PNG"),
         laboratorio: str = Form(..., description="Código del laboratorio o salón"),
@@ -122,12 +121,12 @@ async def mark_teacher_attendance(
     """Marca entrada o salida de un docente o tutor."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Archivo vacío")
 
     try:
-        usuario = find_user_by_image(image_bytes)
+        usuario = find_user_data_by_image(image_bytes)
         _, tipo_usuario = get_user_type(usuario, {2, 3})
         resultado = PkgPersonal(
             usuario=str(current_user.get("username", "API")).upper(),
@@ -159,7 +158,7 @@ async def mark_teacher_attendance(
             "todas las colecciones y registra su entrada o salida en el laboratorio."
     ),
 )
-async def mark_teacher_attendance_liveness(
+def mark_teacher_attendance_liveness(
         request: Request,
         data: TeacherLivenessRequest,
         current_user: dict = Depends(get_current_user),
@@ -167,7 +166,7 @@ async def mark_teacher_attendance_liveness(
     """Valida liveness y marca entrada o salida de un docente o tutor."""
     try:
         image_bytes = get_liveness_image(data.session_id, "attendance_teacher")
-        usuario = find_user_by_image(image_bytes)
+        usuario = find_user_data_by_image(image_bytes)
         _, tipo_usuario = get_user_type(usuario, {2, 3})
         resultado = PkgPersonal(
             usuario=str(current_user.get("username", "API")).upper(),
@@ -198,7 +197,7 @@ async def mark_teacher_attendance_liveness(
             "acceso el usuario autenticado."
     ),
 )
-async def get_laboratorios(request: Request, current_user: dict = Depends(get_current_user)):
+def get_laboratorios(request: Request, current_user: dict = Depends(get_current_user)):
     """Devuelve los laboratorios y salones permitidos para el usuario."""
     try:
         usuario = str(current_user.get("username", "")).upper()
@@ -219,7 +218,7 @@ async def get_laboratorios(request: Request, current_user: dict = Depends(get_cu
 
 
 @router.get("/info_admin")
-async def get_people(request: Request, correlativo: str,
+def get_people(request: Request, correlativo: str,
                      current_user: dict = Depends(get_current_user)):
     usuario = str(current_user['username']).upper()
     empleado = Empleados()
@@ -227,7 +226,7 @@ async def get_people(request: Request, correlativo: str,
 
 
 @router.get("/info_doc")
-async def get_doc(request: Request, correlativo: str,
+def get_doc(request: Request, correlativo: str,
                   current_user: dict = Depends(get_current_user)):
     usuario = str(current_user['username']).upper()
     pkg = PkgPeople(usuario=usuario, ip=request.state.client_ip)

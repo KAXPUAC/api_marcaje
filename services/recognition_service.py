@@ -7,8 +7,8 @@ from services.liveness_session_service import LivenessSessionService
 from services.rekognition_service import RekognitionService
 
 
-def get_liveness_image(session_id: str) -> bytes:
-    LivenessSessionService.consume(session_id, flow="recognize")
+def get_liveness_image(session_id: str, flow: str = "recognize") -> bytes:
+    LivenessSessionService.consume(session_id, flow=flow)
     liveness = RekognitionService.obtener_resultado_liveness(session_id)
     confidence = liveness.get("confidence")
     score = float(confidence) if confidence is not None else None
@@ -32,7 +32,10 @@ def get_liveness_image(session_id: str) -> bytes:
     return reference_image
 
 
-def find_user_by_image(image_bytes: bytes, department_id: str | None = None):
+def find_user_data_by_image(
+    image_bytes: bytes,
+    department_id: str | None = None,
+) -> dict:
     if department_id:
         match = RekognitionService.buscar_rostro_en_departamento(
             departamento_id=department_id,
@@ -55,4 +58,13 @@ def find_user_by_image(image_bytes: bytes, department_id: str | None = None):
             status_code=404,
             detail="No se encontraron datos asociados al rostro reconocido",
         )
-    return RecognizedUserResponse.model_validate(usuario)
+    return usuario
+
+
+def find_user_by_image(
+    image_bytes: bytes,
+    department_id: str | None = None,
+) -> RecognizedUserResponse:
+    return RecognizedUserResponse.model_validate(
+        find_user_data_by_image(image_bytes, department_id)
+    )

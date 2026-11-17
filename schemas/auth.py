@@ -9,10 +9,10 @@ class LoginRequest(BaseModel):
 
 class TokenMeResponse(BaseModel):
     username: str
-    email: str
-    correlativo: int
-    coddepa: str
-    departamento: str
+    email: Optional[str] = None
+    correlativo: Optional[int] = None
+    coddepa: Optional[str] = None
+    departamento: Optional[str] = None
     auth_method: str
     exp: int
     token_type: str

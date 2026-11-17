@@ -17,7 +17,7 @@ router = APIRouter(prefix="/recognize", tags=["Reconocimiento Facial"])
 
 
 @router.post("/liveness/session", response_model=LivenessSessionResponse)
-async def create_liveness_session(
+def create_liveness_session(
         data: LivenessSessionRequest | None = Body(default=None),
 ):
     """Crea una sesión que el cliente debe completar usando Face Liveness."""
@@ -44,7 +44,7 @@ async def create_liveness_session(
     "/{department_id}/search/liveness",
     response_model=RecognizedUserResponse,
 )
-async def recognize_in_department_with_liveness(
+def recognize_in_department_with_liveness(
     data: LivenessRequest,
     department_id: str = Path(..., description="Código de departamento (CODDEPA)"),
 ):
@@ -63,7 +63,7 @@ async def recognize_in_department_with_liveness(
 
 
 @router.post("/search/liveness", response_model=RecognizedUserResponse)
-async def recognize_globally_with_liveness(data: LivenessRequest):
+def recognize_globally_with_liveness(data: LivenessRequest):
     """Valida liveness y reconoce un rostro en todos los departamentos."""
     try:
         image_bytes = get_liveness_image(data.session_id)
@@ -79,7 +79,7 @@ async def recognize_globally_with_liveness(data: LivenessRequest):
 
 
 @router.post("/{department_id}/search", response_model=RecognizedUserResponse)
-async def recognize_in_department(
+def recognize_in_department(
                                   file: UploadFile = File(..., description="Imagen JPG/PNG"),
                                   department_id: str = Path(..., description="Código de departamento (CODDEPA)")):
     """Reconoce un rostro en un departamento y devuelve sus datos completos."""
@@ -88,32 +88,12 @@ async def recognize_in_department(
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
 
     # Leer bytes
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     if len(image_bytes) == 0:
         raise HTTPException(status_code=400, detail="Archivo vacío")
 
     try:
-        # Buscar en Rekognition
-        match = RekognitionService.buscar_rostro_en_departamento(
-            departamento_id=department_id,
-            image_bytes=image_bytes,
-            umbral=90.0
-        )
-
-        if not match:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No se encontró coincidencia en el departamento {department_id}",
-            )
-
-        usuario = Reconocimiento().get_datos_usuario(match["external_image_id"])
-        if not usuario:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontraron datos asociados al rostro reconocido",
-            )
-        return RecognizedUserResponse.model_validate(usuario)
-
+        return find_user_by_image(image_bytes, department_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -122,34 +102,18 @@ async def recognize_in_department(
 
 
 @router.post("/search", response_model=RecognizedUserResponse)
-async def search_face_global(
+def search_face_global(
                              file: UploadFile = File(..., description="Imagen JPG/PNG")):
     """Busca un rostro en todas las colecciones y devuelve sus datos asociados."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
 
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Archivo vacío")
 
     try:
-        match = RekognitionService.buscar_rostro_en_todos_departamentos(
-            image_bytes=image_bytes,
-            umbral=90.0,
-        )
-        if not match:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontró coincidencia en los departamentos indexados",
-            )
-        usuario = Reconocimiento().get_datos_usuario(match["external_image_id"])
-        if not usuario:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontraron datos asociados al rostro reconocido",
-            )
-
-        return RecognizedUserResponse.model_validate(usuario)
+        return find_user_by_image(image_bytes)
     except HTTPException:
         raise
     except Exception as exc:

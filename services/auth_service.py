@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 __pkg_ci = PkgCi()
 __empleados = Empleados()
-__oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+__oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 __settings = OracleSettings()
 
 # Registro local de refresh tokens. Para varios workers/instancias debe migrarse
@@ -305,7 +305,7 @@ def logout(refresh_token: str) -> None:
         _revoke_refresh_token(payload)
 
 
-async def get_current_user(token: str = Depends(__oauth2_scheme)) -> dict:
+def get_current_user(token: str = Depends(__oauth2_scheme)) -> dict:
     """
     Obtiene el usuario actual a partir del token de acceso.
     :param token:

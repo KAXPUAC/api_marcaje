@@ -28,7 +28,9 @@ class SyncService:
     def sincronizar_departamento(cls, coddepa: str) -> Dict:
         empleados = Empleados()
         datos = empleados.get_empleados_coddepa(coddepa)
-        logger.info(f"Código Departamento {coddepa}: {len(datos)} empleados con foto")
+        if not isinstance(datos, list):
+            raise RuntimeError("No se pudieron obtener los empleados del departamento")
+        logger.info("Código Departamento %s: %s empleados con foto", coddepa, len(datos))
         result = {
             "total": len(datos),
             "exitosos": 0,
@@ -42,8 +44,7 @@ class SyncService:
                 else:
                     result["fallidos"] += 1
             except Exception as e:
-                error_msg = f"Error con {emp['correlativo']}: {str(e)}"
-                print(error_msg)
+                error_msg = f"Error con {emp.get('Correlativo', 'desconocido')}: {e}"
                 logger.error(error_msg)
                 result["errores"].append(error_msg)
         return result
@@ -66,15 +67,16 @@ class SyncService:
                 Body=foto_bytes,
                 ContentType='image/jpeg',
                 Metadata={
-                    'Correlativo': correlativo,
+                    'Correlativo': str(correlativo),
                     'Nombre': cls.limpiar_metadata(emp["Nombre"]),
-                    'Coddepa': coddepa,
+                    'Coddepa': str(coddepa),
                     'Departamento': cls.limpiar_metadata(emp["Departamento"])
                 }
             )
+            subido = True
         except Exception as e:
             logger.error(f"Error subiendo empleado {correlativo} a S3: {str(e)}")
-            subido = False
-        logger.info(f"Empleado {correlativo} subido a S3 en {s3_ruta}{s3_nombre}")
+            return False
+        logger.info("Empleado %s subido a S3 en %s%s", correlativo, s3_ruta, s3_nombre)
         RekognitionService.indexar_rostro(departamento_id=coddepa, image_bytes=foto_bytes, correlativo=correlativo)
         return subido

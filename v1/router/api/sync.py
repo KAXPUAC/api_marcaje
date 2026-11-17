@@ -1,12 +1,11 @@
-from services.auth_service import get_current_user
-from fastapi import Depends
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException
 from oracleug.models.dynamics import Dynamics
-from requests import Request
 from services.rekognition_service import RekognitionService
 from aws.aws_settings import aws_settings
 from services.sync_service import SyncService
+from services.auth_service import get_current_user
+from fastapi import Depends
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ router = APIRouter(prefix="/sync", tags=["Sincronización"])
 
 
 @router.post("/departamento/{coddepa}/")
-async def sync_departamento(coddepa: str):
+def sync_departamento(coddepa: str, current_user: dict = Depends(get_current_user)):
     """Sincroniza un departamento."""
     try:
         return SyncService.sincronizar_departamento(coddepa)
@@ -26,7 +25,7 @@ async def sync_departamento(coddepa: str):
 
 
 @router.post("/departamento/{coddepa}/status/")
-async def status_departamento(coddepa: str):
+def status_departamento(coddepa: str, current_user: dict = Depends(get_current_user)):
     """Verifica si la collection existe y cuántas caras tiene."""
 
     collection_id = RekognitionService.obtener_nombre_coleccion(coddepa)
@@ -44,8 +43,7 @@ async def status_departamento(coddepa: str):
 
 
 @router.get("/departamentos")
-#async def get_departamentos(current_user: dict = Depends(get_current_user)):
-async def get_departamentos():
+def get_departamentos(current_user: dict = Depends(get_current_user)):
     """Obtiene la lista de departamentos de Oracle"""
     try:
         dynamics = Dynamics()

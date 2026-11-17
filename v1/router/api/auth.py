@@ -18,32 +18,32 @@ router = APIRouter(prefix='/auth', tags=["Autenticación"])
 
 
 @router.post("/token", response_model=TokenResponse)
-async def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     return login_api(form_data.username, form_data.password, ip=request.state.client_ip)
 
 
 @router.post("/token/refresh", response_model=TokenResponse)
-async def refresh_token(request: Request, data: RefreshTokenRequest):
+def refresh_token(request: Request, data: RefreshTokenRequest):
     return refresh_access_token(data.refresh_token, ip=request.state.client_ip)
 
 
 @router.post("/google", response_model=TokenResponse)
-async def google_login(request: Request, data: SocialLoginRequest):
+def google_login(request: Request, data: SocialLoginRequest):
     return social_login("google", data.id_token, ip=request.state.client_ip)
 
 
 @router.post("/microsoft", response_model=TokenResponse)
-async def microsoft_login(request: Request, data: SocialLoginRequest):
+def microsoft_login(request: Request, data: SocialLoginRequest):
     return social_login("microsoft", data.id_token, ip=request.state.client_ip)
 
 
 @router.post("/facial", response_model=TokenResponse)
-async def facial_auth(request: Request, file: UploadFile = File(..., description="Imagen JPG/PNG")):
+def facial_auth(request: Request, file: UploadFile = File(..., description="Imagen JPG/PNG")):
     """Auténtica al usuario buscando su rostro en todos los departamentos."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
 
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Archivo vacío")
 
@@ -73,7 +73,7 @@ async def facial_auth(request: Request, file: UploadFile = File(..., description
 
 
 @router.post("/facial/liveness", response_model=LivenessLoginResponse)
-async def facial_liveness_login(request: Request, data: LivenessRequest):
+def facial_liveness_login(request: Request, data: LivenessRequest):
     """Valida liveness, reconoce el rostro y genera los tokens."""
     try:
         LivenessSessionService.consume(data.session_id, flow="login")
@@ -133,12 +133,12 @@ async def facial_liveness_login(request: Request, data: LivenessRequest):
 
 
 @router.post("/logout")
-async def logout_token(data: RefreshTokenRequest):
+def logout_token(data: RefreshTokenRequest):
     logout(data.refresh_token)
     return {"message": "Sesión cerrada correctamente"}
 
 
 # 3. Ejemplo de ruta protegida
 @router.get("/users/me", response_model=TokenMeResponse)
-async def read_users_me(current_user: dict = Depends(get_current_user)):
+def read_users_me(current_user: dict = Depends(get_current_user)):
     return current_user

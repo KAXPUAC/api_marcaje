@@ -97,7 +97,8 @@ class RekognitionService:
                 match = cls.buscar_rostro_en_departamento(
                     departamento_id=departamento_id,
                     image_bytes=image_bytes,
-                    umbral=umbral
+                    umbral=umbral,
+                    crear_collection=False,
                 )
 
                 if match:
