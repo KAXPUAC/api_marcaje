@@ -9,8 +9,8 @@
         "header": "Authorization: Bearer <access_token>",
         "access_token_expires_in_seconds": 1800,
         "refresh_token_expires_in_seconds": 2592000,
-        "renew_endpoint": "POST /api/v1/token/refresh",
-        "logout_endpoint": "POST /api/v1/logout"
+        "renew_endpoint": "POST /api/v1/auth/token/refresh",
+        "logout_endpoint": "POST /api/v1/auth/logout"
     },
     "face_liveness": {
         "confidence_threshold": 90,
@@ -64,10 +64,7 @@
         {
             "name": "Iniciar sesión",
             "method": "POST",
-            "path": "/api/v1/token",
-            "aliases": [
-                "/token"
-            ],
+            "path": "/api/v1/auth/token",
             "authentication_required": false,
             "content_type": "application/x-www-form-urlencoded",
             "parameters": [
@@ -105,10 +102,7 @@
         {
             "name": "Renovar tokens",
             "method": "POST",
-            "path": "/api/v1/token/refresh",
-            "aliases": [
-                "/token/refresh"
-            ],
+            "path": "/api/v1/auth/token/refresh",
             "authentication_required": false,
             "content_type": "application/json",
             "request": {
@@ -138,10 +132,7 @@
         {
             "name": "Cerrar sesión",
             "method": "POST",
-            "path": "/api/v1/logout",
-            "aliases": [
-                "/logout"
-            ],
+            "path": "/api/v1/auth/logout",
             "authentication_required": false,
             "content_type": "application/json",
             "request": {
@@ -158,7 +149,7 @@
         {
             "name": "Obtener usuario autenticado",
             "method": "GET",
-            "path": "/api/v1/users/me",
+            "path": "/api/v1/auth/users/me",
             "authentication_required": true,
             "parameters": [],
             "request": null,
@@ -216,64 +207,6 @@
                 "content_type": "application/json",
                 "type": "array|object",
                 "body": "Respuesta de DBAFISICC.PKG_PEOPLE.DATOSNOPERSONALTB"
-            }
-        },
-        {
-            "name": "Marcar ingreso de personal",
-            "method": "POST",
-            "path": "/api/v1/people/marcar",
-            "authentication_required": true,
-            "content_type": "application/x-www-form-urlencoded",
-            "parameters": [
-                {
-                    "name": "codpers",
-                    "location": "query",
-                    "type": "string",
-                    "required": true
-                }
-            ],
-            "request": null,
-            "response": {
-                "status": 200,
-                "content_type": "application/json",
-                "type": "MarkingResponse",
-                "body": {
-                    "RETORNO_FUNCION": "I",
-                    "PMENSAJE": "11:12:02",
-                    "PSQLCODE": 0
-                }
-            }
-        },
-        {
-            "name": "Marcar ingreso de docente",
-            "method": "POST",
-            "path": "/api/v1/people/marcar_doc",
-            "authentication_required": true,
-            "content_type": "application/x-www-form-urlencoded",
-            "parameters": [
-                {
-                    "name": "codpers",
-                    "location": "query",
-                    "type": "string",
-                    "required": true
-                },
-                {
-                    "name": "laboratorio",
-                    "location": "query",
-                    "type": "string",
-                    "required": true
-                }
-            ],
-            "request": null,
-            "response": {
-                "status": 200,
-                "content_type": "application/json",
-                "type": "MarkingResponse",
-                "body": {
-                    "RETORNO_FUNCION": "I",
-                    "PMENSAJE": "11:12:02",
-                    "PSQLCODE": 0
-                }
             }
         },
         {
@@ -424,67 +357,6 @@
                 "status": 200,
                 "content_type": "application/json",
                 "type": "TokenResponse"
-            }
-        },
-        {
-            "name": "Reconocimiento facial automático",
-            "method": "POST",
-            "path": "/api/v1/recognize/automatic",
-            "authentication_required": false,
-            "content_type": "multipart/form-data",
-            "parameters": [
-                {
-                    "name": "file",
-                    "location": "multipart",
-                    "type": "file",
-                    "required": true,
-                    "accepted_types": [
-                        "image/jpeg",
-                        "image/png"
-                    ]
-                }
-            ],
-            "response": {
-                "status": 200,
-                "content_type": "application/json",
-                "type": "OracleUser",
-                "body": {
-                    "Codpers": "9876",
-                    "Usuario": "jperez",
-                    "Gracad": "DOC",
-                    "Nombres": "Juan Carlos",
-                    "Apellidos": "Pérez López",
-                    "Email": "jperez@dominio.com",
-                    "Gmail": "jperez@dominio.com",
-                    "Gmail2": null,
-                    "Correlativo": "12345",
-                    "Coddepa": "ADM",
-                    "Departamento": "Administración",
-                    "TipoUsuario": "Alumno",
-                    "Nombrepila": "Juan Carlos",
-                    "Dpi": "1234567890101",
-                    "Carnet": "CARNET-001",
-                    "Carnet1": "CARNET-002",
-                    "Carnet2": "CARNET-003",
-                    "Usuarios": [
-                        {
-                            "Tipo": 1,
-                            "TipoUsuario": "Administrativo",
-                            "Usuario": "jperez",
-                            "Email": "jperez@dominio.com",
-                            "Gmail": "jperez@dominio.com",
-                            "Gmail2": null
-                        },
-                        {
-                            "Tipo": 4,
-                            "TipoUsuario": "Alumno",
-                            "Usuario": "jperez.alumno",
-                            "Email": "alumno@dominio.com",
-                            "Gmail": null,
-                            "Gmail2": null
-                        }
-                    ]
-                }
             }
         },
         {

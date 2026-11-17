@@ -3,9 +3,23 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MarkingResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+class AttendanceResponse(BaseModel):
+    marcado: bool
+    abrir_puerta: bool
+    codpers: Optional[str] = None
+    tipo_usuario: Optional[str] = None
+    departamento: Optional[str] = None
+    laboratorio: Optional[str] = None
+    retorno_funcion: Optional[str] = None
+    mensaje: Optional[str] = None
+    psqlcode: Optional[int] = None
 
-    retorno_funcion: Optional[str] = Field(default=None, alias="RETORNO_FUNCION")
-    pmensaje: Optional[str] = Field(default=None, alias="PMENSAJE")
-    psqlcode: Optional[int] = Field(default=None, alias="PSQLCODE")
+
+class AdministrativeLivenessRequest(BaseModel):
+    session_id: str
+    departamento: str
+
+
+class TeacherLivenessRequest(BaseModel):
+    session_id: str
+    laboratorio: str

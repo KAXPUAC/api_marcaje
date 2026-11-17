@@ -1,8 +1,5 @@
-from fastapi import FastAPI, Depends, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import FastAPI, Request
 from v1.router.api import sync, recognize, auth, people
-from services.auth_service import login_api, logout, refresh_access_token
-from schemas.auth import RefreshTokenRequest, TokenResponse
 from services.request_service import get_client_ip
 
 app = FastAPI(title="API de Marcaje", version="1.0.0",
@@ -19,22 +16,6 @@ async def set_client_ip(request: Request, call_next):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-
-@app.post("/token", response_model=TokenResponse)
-async def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
-    return login_api(username=form_data.username, password=form_data.password, ip=request.state.client_ip)
-
-
-@app.post("/token/refresh", response_model=TokenResponse)
-async def refresh_token(request: Request, data: RefreshTokenRequest):
-    return refresh_access_token(data.refresh_token, ip=request.state.client_ip)
-
-
-@app.post("/logout")
-async def logout_token(data: RefreshTokenRequest):
-    logout(data.refresh_token)
-    return {"message": "Sesión cerrada correctamente"}
 
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Autenticación"])

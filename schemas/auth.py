@@ -47,7 +47,12 @@ class LivenessSessionResponse(BaseModel):
 
 
 class LivenessSessionRequest(BaseModel):
-    flow: Literal["login", "recognize"] = "login"
+    flow: Literal[
+        "login",
+        "recognize",
+        "attendance_admin",
+        "attendance_teacher",
+    ] = "login"
 
 
 class LivenessRequest(BaseModel):
