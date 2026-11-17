@@ -5,7 +5,8 @@ from services.auth_service import login_api, logout, refresh_access_token
 from schemas.auth import RefreshTokenRequest, TokenResponse
 from services.request_service import get_client_ip
 
-app = FastAPI()
+app = FastAPI(title="API de Marcaje", version="1.0.0",
+              description="API para el sistema de marcaje de personal y docentes, con reconocimiento facial y autenticación social.")
 
 
 @app.middleware("http")
