@@ -107,11 +107,13 @@ def _create_auth_tokens(user: dict, auth_method: str):
     email = _get_value(user, "EMAIL", "GMAIL", "email")
     correlativo = _get_value(user, "CORRELATIVO", "correlativo")
     coddepa = _get_value(user, "CODDEPA", "coddepa")
+    departamento = _get_value(user, "DEPARTAMENTO", "departamento")
     user_data = {
         "username": username,
         "email": email,
         "correlativo": correlativo,
         "coddepa": coddepa,
+        "departamento": departamento,
         "auth_method": auth_method,
     }
     access_token = create_access_token(data=user_data)
