@@ -7,6 +7,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class TokenMeResponse(BaseModel):
+    username: str
+    email: str
+    correlativo: int
+    coddepa: str
+    departamento: str
+    auth_method: str
+    exp: int
+    token_type: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

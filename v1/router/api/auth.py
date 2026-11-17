@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from services.auth_service import get_current_user
-from schemas.auth import RefreshTokenRequest, SocialLoginRequest, TokenResponse
+from schemas.auth import RefreshTokenRequest, SocialLoginRequest, TokenResponse, TokenMeResponse
 from services.auth_service import login_api, logout, refresh_access_token, social_login
 
 router = APIRouter()
@@ -34,6 +34,6 @@ async def logout_token(data: RefreshTokenRequest):
 
 
 # 3. Ejemplo de ruta protegida
-@router.get("/users/me")
+@router.get("/users/me", response_model=TokenMeResponse)
 async def read_users_me(current_user: dict = Depends(get_current_user)):
-    return {"message": "Acceso concedido", "user": current_user}
+    return current_user
