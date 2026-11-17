@@ -16,10 +16,10 @@ from oracleug.security import (
     decode_refresh_token,
 )
 import logging
-import time
 from typing import Optional
 from oracleug.oracle_settings import OracleSettings
 from jose import jwt
+from services.sqlite_store import sqlite_store
 
 logger = logging.getLogger(__name__)
 
@@ -28,35 +28,36 @@ __empleados = Empleados()
 __oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 __settings = OracleSettings()
 
-# Registro local de refresh tokens. Para varios workers/instancias debe migrarse
-# a Redis o a una tabla de base de datos compartida.
-__active_refresh_tokens: dict[str, int] = {}
-
-
 def _cleanup_refresh_tokens() -> None:
-    now = int(time.time())
-    expired = [jti for jti, exp in __active_refresh_tokens.items() if exp <= now]
-    for jti in expired:
-        del __active_refresh_tokens[jti]
+    sqlite_store.cleanup_expired()
 
 
 def _register_refresh_token(token: str, payload: Optional[dict] = None) -> None:
     payload = payload or decode_refresh_token(token)
     if payload and payload.get("jti") and payload.get("exp"):
         _cleanup_refresh_tokens()
-        __active_refresh_tokens[payload["jti"]] = int(payload["exp"])
+        sqlite_store.register_refresh_token(
+            jti=payload["jti"],
+            expires_at=int(payload["exp"]),
+        )
 
 
 def _is_active_refresh_token(payload: dict) -> bool:
     _cleanup_refresh_tokens()
     jti = payload.get("jti")
-    return bool(jti and __active_refresh_tokens.get(jti) == int(payload.get("exp", 0)))
+    return bool(
+        jti
+        and sqlite_store.is_refresh_token_active(
+            jti=jti,
+            expires_at=int(payload.get("exp", 0)),
+        )
+    )
 
 
 def _revoke_refresh_token(payload: dict) -> None:
     jti = payload.get("jti")
     if jti:
-        __active_refresh_tokens.pop(jti, None)
+        sqlite_store.revoke_refresh_token(jti)
 
 
 def _get_value(data: dict, *names: str, default=None):

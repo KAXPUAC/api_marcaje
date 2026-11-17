@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import HTTPException, status
+from services.sqlite_store import sqlite_store
 
 
 @dataclass
@@ -15,18 +16,11 @@ class LivenessSession:
 
 
 class LivenessSessionService:
-    """Control local de sesiones Face Liveness.
-
-    Debe reemplazarse por Redis u Oracle cuando la API utilice varias
-    instancias o workers independientes.
-    """
-
-    _sessions: dict[str, LivenessSession] = {}
+    """Control persistente de sesiones Face Liveness mediante SQLite."""
 
     @classmethod
     def register(cls, session_id: str, owner: Optional[str], flow: str, ttl: int) -> None:
-        cls._cleanup()
-        cls._sessions[session_id] = LivenessSession(
+        sqlite_store.register_liveness_session(
             session_id=session_id,
             owner=owner,
             flow=flow,
@@ -35,8 +29,18 @@ class LivenessSessionService:
 
     @classmethod
     def consume(cls, session_id: str, flow: str, owner: Optional[str] = None) -> LivenessSession:
-        cls._cleanup()
-        session = cls._sessions.get(session_id)
+        row = sqlite_store.consume_liveness_session(session_id)
+        session = (
+            LivenessSession(
+                session_id=row["session_id"],
+                owner=row["owner"],
+                flow=row["flow"],
+                expires_at=row["expires_at"],
+                used=bool(row["used"]),
+            )
+            if row is not None
+            else None
+        )
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,12 +61,4 @@ class LivenessSessionService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="La sesión de liveness pertenece a otro operador",
             )
-        session.used = True
         return session
-
-    @classmethod
-    def _cleanup(cls) -> None:
-        now = time.time()
-        expired = [key for key, value in cls._sessions.items() if value.expires_at <= now]
-        for key in expired:
-            del cls._sessions[key]
