@@ -27,13 +27,17 @@ class Empleados:
                                      A.GMAIL                           AS EMAIL,
                                      A.GMAIL,
                                      A.GMAIL2,
-                                     A.CORRELATIVO
+                                     A.CORRELATIVO,
+                                     D.CODDEPA,
+                                     D.DEPARTAMENTO
                               FROM DBAFISICC.CACARNETUSUARIOTB A
                                        JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
+                                       LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
                               WHERE A.CORRELATIVO = :1
            AND :2 IS NOT NULL
            AND A.TIPO = 1
            AND A.ACTIVO = 1
+           AND A.LOGIN_USUARIO = 1
            AND B.STATUS <> 'B'
 
                               UNION ALL
@@ -46,16 +50,42 @@ class Empleados:
                                      A.GMAIL                           AS EMAIL,
                                      A.GMAIL,
                                      A.GMAIL2,
-                                     A.CORRELATIVO
+                                     A.CORRELATIVO,
+                                     D.CODDEPA,
+                                     D.DEPARTAMENTO
                               FROM DBAFISICC.CACARNETUSUARIOTB A
                                        JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
+                                       LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
                               WHERE A.USUARIO = :3
            AND :4 IS NULL
            AND :5 IS NOT NULL
            AND A.TIPO = 1
            AND A.ACTIVO = 1
-           AND B.STATUS <> 'B' \
+           AND A.LOGIN_USUARIO = 1
+                               AND B.STATUS <> 'B' \
                               """
+
+    __email = """
+                SELECT B.CODPERS,
+                       A.USUARIO,
+                       B.GRACAD,
+                       B.NOMBRE1 || ' ' || B.NOMBRE2     AS NOMBRES,
+                       B.APELLIDO1 || ' ' || B.APELLIDO2 AS APELLIDOS,
+                       A.GMAIL                           AS EMAIL,
+                       A.GMAIL,
+                       A.GMAIL2,
+                       A.CORRELATIVO,
+                       D.CODDEPA,
+                       D.DEPARTAMENTO
+                FROM DBAFISICC.CACARNETUSUARIOTB A
+                         JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
+                         LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
+                WHERE UPPER(TRIM(A.GMAIL)) = UPPER(TRIM(:email))
+                  AND A.TIPO = 1
+                  AND A.ACTIVO = 1
+                  AND A.LOGIN_GOOGLE = 1
+                  AND B.STATUS <> 'B'
+                """
 
     def __init__(self):
         self.__con = Oradb()
@@ -101,3 +131,12 @@ class Empleados:
         ]
 
         return self.__con.execute_query(query=self.__usuario_o_correlativo, params=parametros)
+
+    def get_usuario_por_email(self, email: str):
+        parametros = [{
+            "nombre": "email",
+            "valor": email.strip(),
+            "tipo": ODBType.VARCHAR2,
+            "direccion": "IN",
+        }]
+        return self.__con.execute_query(query=self.__email, params=parametros)

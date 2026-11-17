@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from services.auth_service import get_current_user
-from schemas.auth import RefreshTokenRequest, TokenResponse
-from services.auth_service import login_api, logout, refresh_access_token
+from schemas.auth import RefreshTokenRequest, SocialLoginRequest, TokenResponse
+from services.auth_service import login_api, logout, refresh_access_token, social_login
 
 router = APIRouter()
 
@@ -15,6 +15,16 @@ async def get_token(request: Request, form_data: OAuth2PasswordRequestForm = Dep
 @router.post("/token/refresh", response_model=TokenResponse)
 async def refresh_token(request: Request, data: RefreshTokenRequest):
     return refresh_access_token(data.refresh_token, ip=request.state.client_ip)
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_login(request: Request, data: SocialLoginRequest):
+    return social_login("google", data.id_token, ip=request.state.client_ip)
+
+
+@router.post("/microsoft", response_model=TokenResponse)
+async def microsoft_login(request: Request, data: SocialLoginRequest):
+    return social_login("microsoft", data.id_token, ip=request.state.client_ip)
 
 
 @router.post("/logout")

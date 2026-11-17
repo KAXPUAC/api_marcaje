@@ -1,4 +1,9 @@
 import hashlib
+import json
+import os
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
 from oracleug.models.pkg_ci import PkgCi
 from oracleug.scripts.empleados import Empleados
@@ -14,6 +19,7 @@ import logging
 import time
 from typing import Optional
 from oracleug.oracle_settings import OracleSettings
+from jose import jwt
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +86,7 @@ def _token_response(access_token: str, refresh_token: str, user: dict, auth_meth
     username = str(_get_value(user, "USUARIO", "username", default=""))
     email = _get_value(user, "EMAIL", "GMAIL", "email")
     correlativo = _get_value(user, "CORRELATIVO", "correlativo")
+    coddepa = _get_value(user, "CODDEPA", "coddepa")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -89,6 +96,7 @@ def _token_response(access_token: str, refresh_token: str, user: dict, auth_meth
         "username": username,
         "email": email,
         "correlativo": str(correlativo) if correlativo is not None else None,
+        "coddepa": str(coddepa) if coddepa is not None else None,
         "auth_method": auth_method,
         "datos_usuario": user,
     }
@@ -98,10 +106,12 @@ def _create_auth_tokens(user: dict, auth_method: str):
     username = str(_get_value(user, "USUARIO", "username", default=""))
     email = _get_value(user, "EMAIL", "GMAIL", "email")
     correlativo = _get_value(user, "CORRELATIVO", "correlativo")
+    coddepa = _get_value(user, "CODDEPA", "coddepa")
     user_data = {
         "username": username,
         "email": email,
         "correlativo": correlativo,
+        "coddepa": coddepa,
         "auth_method": auth_method,
     }
     access_token = create_access_token(data=user_data)
@@ -198,6 +208,92 @@ def facial_login(correlativo: str, ip: str = "0.0.0.0", auth_method: str = "faci
         )
     logger.info("Autenticación facial para correlativo %s desde %s", correlativo, ip)
     return _create_auth_tokens(user, auth_method)
+
+
+def _fetch_json(url: str, params: dict[str, str] | None = None) -> dict:
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    try:
+        with urlopen(UrlRequest(url, headers={"Accept": "application/json"}), timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token del proveedor no es válido",
+        ) from exc
+
+
+def _verify_google_token(id_token: str) -> str:
+    claims = _fetch_json(
+        "https://oauth2.googleapis.com/tokeninfo",
+        {"id_token": id_token},
+    )
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID no está configurado")
+    if claims.get("aud") != client_id:
+        raise HTTPException(status_code=401, detail="El token de Google no pertenece a esta aplicación")
+    if claims.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
+        raise HTTPException(status_code=401, detail="Emisor de Google no válido")
+    if str(claims.get("email_verified", "")).lower() != "true":
+        raise HTTPException(status_code=401, detail="El correo de Google no está verificado")
+    email = claims.get("email", "").strip()
+    if not email:
+        raise HTTPException(status_code=401, detail="Google no proporcionó un correo")
+    return email
+
+
+def _verify_microsoft_token(id_token: str) -> str:
+    try:
+        unverified = jwt.get_unverified_claims(id_token)
+        header = jwt.get_unverified_header(id_token)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="El token de Microsoft no es válido") from exc
+
+    tenant_id = str(unverified.get("tid", "")).strip()
+    configured_tenant = os.getenv("MICROSOFT_TENANT_ID", "").strip()
+    if not tenant_id or (configured_tenant and configured_tenant not in {"common", tenant_id}):
+        raise HTTPException(status_code=401, detail="El tenant de Microsoft no está autorizado")
+
+    client_id = os.getenv("MICROSOFT_CLIENT_ID", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="MICROSOFT_CLIENT_ID no está configurado")
+
+    keys = _fetch_json(
+        f"https://login.microsoftonline.com/{tenant_id}/discovery/v2.0/keys"
+    ).get("keys", [])
+    key_data = next((key for key in keys if key.get("kid") == header.get("kid")), None)
+    if not key_data:
+        raise HTTPException(status_code=401, detail="No se encontró la clave de Microsoft")
+    try:
+        issuer = f"https://login.microsoftonline.com/{tenant_id}/v2.0"
+        jwt.decode(id_token, key_data, algorithms=["RS256"], audience=client_id, issuer=issuer)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="El token de Microsoft no es válido") from exc
+
+    email = (unverified.get("email") or unverified.get("preferred_username") or "").strip()
+    if not email:
+        raise HTTPException(status_code=401, detail="Microsoft no proporcionó un correo")
+    return email
+
+
+def social_login(provider: str, id_token: str, ip: str = "0.0.0.0"):
+    provider = provider.lower().strip()
+    if provider == "google":
+        email = _verify_google_token(id_token)
+    elif provider == "microsoft":
+        email = _verify_microsoft_token(id_token)
+    else:
+        raise HTTPException(status_code=400, detail="Proveedor no soportado")
+
+    user = _get_first_user(__empleados.get_usuario_por_email(email))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El correo autenticado no está registrado o no tiene acceso",
+        )
+    logger.info("Autenticación %s para %s desde %s", provider, email, ip)
+    return _create_auth_tokens(user, provider)
 
 
 def logout(refresh_token: str) -> None:

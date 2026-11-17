@@ -16,8 +16,13 @@ class TokenResponse(BaseModel):
     email: Optional[str] = None
     token_type: str = "bearer"
     correlativo: Optional[str] = None
+    coddepa: Optional[str] = None
     auth_method: str
     datos_usuario: Optional[dict[str, Any]] = None
+
+
+class SocialLoginRequest(BaseModel):
+    id_token: str
 
 
 class RefreshTokenRequest(BaseModel):
@@ -51,6 +56,7 @@ class LivenessLoginResponse(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     correlativo: Optional[str] = None
+    coddepa: Optional[str] = None
     auth_method: Optional[str] = None
     datos_usuario: Optional[dict[str, Any]] = None
     message: Optional[str] = None
