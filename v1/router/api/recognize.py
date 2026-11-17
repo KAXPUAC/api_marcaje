@@ -1,10 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request, Body
+from fastapi import APIRouter, UploadFile, File, Path, Form, HTTPException, Depends, Request, Body
 from fastapi.security import OAuth2PasswordBearer
 from services.auth_service import facial_login, get_current_user
-from oracleug.scripts.empleados import Empleados
+from oracleug.scripts.reconocimiento import Reconocimiento
 from services.rekognition_service import RekognitionService
 from services.liveness_session_service import LivenessSessionService
-from schemas.recognize import RecognizeResponse
+from schemas.recognize import RecognizeResponse, RecognizedUserResponse
 from schemas.auth import (
     LivenessLoginResponse,
     LivenessRequest,
@@ -78,7 +78,7 @@ async def authenticate_with_liveness(request: Request, data: LivenessRequest,
                 "is_live": False,
                 "liveness_score": score,
                 "spoof_detected": liveness["status"] == "FAILED" or (
-                            score is not None and score < aws_settings.face_liveness_confidence_threshold()),
+                        score is not None and score < aws_settings.face_liveness_confidence_threshold()),
                 "message": "No se pudo verificar que exista una persona real frente a la cámara.",
             }
 
@@ -142,7 +142,7 @@ async def verify_liveness_for_marking(
                 "is_live": False,
                 "liveness_score": score,
                 "spoof_detected": liveness["status"] == "FAILED" or (
-                            score is not None and score < aws_settings.face_liveness_confidence_threshold()),
+                        score is not None and score < aws_settings.face_liveness_confidence_threshold()),
                 "message": "La imagen no corresponde a una persona real.",
             }
 
@@ -189,14 +189,11 @@ async def verify_liveness_for_marking(
         raise HTTPException(status_code=500, detail="Error procesando la verificación facial") from e
 
 
-@router.post("", response_model=RecognizeResponse)
-async def recognize_face(current_user: dict = Depends(get_current_user),
-                         file: UploadFile = File(..., description="Imagen JPG/PNG"),
-                         departamento: str = Form(..., description="Código de departamento (CODDEPA)")):
-    """
-    Reconoce un rostro comparando contra la collection Rekognition del departamento.
-    Retorna el correlativo del empleado (ExternalImageId) si hay coincidencia ≥ 90%.
-    """
+@router.post("/{department_id}/search", response_model=RecognizedUserResponse)
+async def recognize_in_department(
+                                  file: UploadFile = File(..., description="Imagen JPG/PNG"),
+                                  department_id: str = Path(..., description="Código de departamento (CODDEPA)")):
+    """Reconoce un rostro en un departamento y devuelve sus datos completos."""
     # Validar tipo de archivo
     if not file.content_type or not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
@@ -209,27 +206,66 @@ async def recognize_face(current_user: dict = Depends(get_current_user),
     try:
         # Buscar en Rekognition
         match = RekognitionService.buscar_rostro_en_departamento(
-            departamento_id=departamento,
+            departamento_id=department_id,
             image_bytes=image_bytes,
             umbral=90.0
         )
 
         if not match:
-            return RecognizeResponse(
-                success=False,
-                message=f"No se encontró coincidencia en el departamento {departamento}"
+            raise HTTPException(
+                status_code=404,
+                detail=f"No se encontró coincidencia en el departamento {department_id}",
             )
-        empleado = Empleados()
-        datos = empleado.get_empleado_info(correlativo=match["external_image_id"])
-        return RecognizeResponse(
-            success=True,
-            correlativo=match["external_image_id"],
-            datos_info=datos,
-            similarity=match["similarity"],
-            face_id=match["face_id"],
-            confidence=match["confidence"]
-        )
 
+        usuario = Reconocimiento().get_datos_usuario(match["external_image_id"])
+        if not usuario:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontraron datos asociados al rostro reconocido",
+            )
+        return RecognizedUserResponse.model_validate(usuario)
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error en reconocimiento: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")
+
+
+@router.post("/search", response_model=RecognizedUserResponse)
+async def search_face_global(
+                             file: UploadFile = File(..., description="Imagen JPG/PNG")):
+    """Busca un rostro en todas las colecciones y devuelve sus datos asociados."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+
+    try:
+        match = RekognitionService.buscar_rostro_en_todos_departamentos(
+            image_bytes=image_bytes,
+            umbral=90.0,
+        )
+        if not match:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontró coincidencia en los departamentos indexados",
+            )
+        usuario = Reconocimiento().get_datos_usuario(match["external_image_id"])
+        if not usuario:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontraron datos asociados al rostro reconocido",
+            )
+
+        return RecognizedUserResponse.model_validate(usuario)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error en reconocimiento automático")
+        raise HTTPException(
+            status_code=500,
+            detail="Error procesando el reconocimiento facial",
+        ) from exc

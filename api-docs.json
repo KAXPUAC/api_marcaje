@@ -12,6 +12,18 @@
         "renew_endpoint": "POST /api/v1/token/refresh",
         "logout_endpoint": "POST /api/v1/logout"
     },
+    "face_liveness": {
+        "confidence_threshold": 90,
+        "session_ttl_seconds": 180,
+        "session_reuse": "not_allowed",
+        "client_requirement": "El cliente debe completar la sesión utilizando Amazon Amplify Face Liveness mediante un WebView.",
+        "identity_pool_id": "Identificador público de Cognito utilizado por Amplify para configurar el Identity Pool y obtener credenciales temporales; no es una clave AWS.",
+        "identity_pool_requirements": [
+            "El Identity Pool debe permitir acceso guest/no autenticado para el flujo de Face Liveness.",
+            "El rol guest debe tener únicamente los permisos necesarios para el streaming, empezando por rekognition:StartFaceLivenessSession.",
+            "Las credenciales administrativas y las claves AWS permanentes permanecen exclusivamente en el backend."
+        ]
+    },
     "common_errors": {
         "400": {
             "content_type": "application/json",
@@ -83,7 +95,10 @@
                     "refresh_expires_in": 2592000,
                     "token_type": "bearer",
                     "username": "usuario",
-                    "email": "usuario@example.com"
+                    "email": "usuario@example.com",
+                    "correlativo": "12345",
+                    "auth_method": "password",
+                    "datos_usuario": {}
                 }
             }
         },
@@ -109,7 +124,10 @@
                     "refresh_expires_in": 2592000,
                     "token_type": "bearer",
                     "username": "usuario",
-                    "email": "usuario@example.com"
+                    "email": "usuario@example.com",
+                    "correlativo": "12345",
+                    "auth_method": "password",
+                    "datos_usuario": {}
                 }
             },
             "notes": [
@@ -141,7 +159,7 @@
             "name": "Obtener usuario autenticado",
             "method": "GET",
             "path": "/api/v1/users/me",
-            "authentication_required": false,
+            "authentication_required": true,
             "parameters": [],
             "request": null,
             "response": {
@@ -218,8 +236,12 @@
             "response": {
                 "status": 200,
                 "content_type": "application/json",
-                "type": "string|object",
-                "body": "Respuesta de DBAFISICC.PKG_PERSONAL.INGRESO_PERSONAL"
+                "type": "MarkingResponse",
+                "body": {
+                    "RETORNO_FUNCION": "I",
+                    "PMENSAJE": "11:12:02",
+                    "PSQLCODE": 0
+                }
             }
         },
         {
@@ -246,8 +268,118 @@
             "response": {
                 "status": 200,
                 "content_type": "application/json",
-                "type": "string|object",
-                "body": "Respuesta de DBAFISICC.PKG_PERSONAL.INGRESO_DOCENTE"
+                "type": "MarkingResponse",
+                "body": {
+                    "RETORNO_FUNCION": "I",
+                    "PMENSAJE": "11:12:02",
+                    "PSQLCODE": 0
+                }
+            }
+        },
+        {
+            "name": "Crear sesión de Face Liveness",
+            "method": "POST",
+            "path": "/api/v1/recognize/liveness/session",
+            "authentication_required": false,
+            "content_type": "application/json",
+            "request": {
+                "flow": "login"
+            },
+            "parameters": [],
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "body": {
+                    "session_id": "liveness-session-id",
+                    "region": "us-east-1",
+                    "identity_pool_id": "us-east-1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                }
+            },
+            "notes": [
+                "El flujo login es el valor predeterminado y no requiere Bearer.",
+                "Para marcaje, enviar flow=verify y Authorization: Bearer <access_token>.",
+                "El cliente debe usar session_id, region e identity_pool_id con Amazon Amplify Face Liveness.",
+                "identity_pool_id es un identificador público de Cognito para obtener credenciales temporales; no es una clave AWS."
+            ]
+        },
+        {
+            "name": "Autenticación con Face Liveness",
+            "method": "POST",
+            "path": "/api/v1/recognize/liveness",
+            "authentication_required": false,
+            "content_type": "application/json",
+            "request": {
+                "session_id": "liveness-session-id"
+            },
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "TokenResponse",
+                "body": {
+                    "access_token": "eyJ...",
+                    "refresh_token": "eyJ...",
+                    "expires_in": 1800,
+                    "refresh_expires_in": 2592000,
+                    "token_type": "bearer",
+                    "username": "usuario",
+                    "email": "usuario@example.com",
+                    "correlativo": "12345",
+                    "auth_method": "facial_liveness",
+                    "datos_usuario": {}
+                },
+                "failure_body": {
+                    "success": false,
+                    "is_live": false,
+                    "liveness_score": 18.4,
+                    "spoof_detected": true,
+                    "access_token": null,
+                    "refresh_token": null,
+                    "message": "No se pudo verificar que exista una persona real frente a la cámara."
+                }
+            }
+        },
+        {
+            "name": "Verificar Face Liveness para marcaje",
+            "method": "POST",
+            "path": "/api/v1/recognize/liveness/verify",
+            "authentication_required": true,
+            "content_type": "application/json",
+            "request": {
+                "session_id": "liveness-session-id",
+                "departamento": "ADM"
+            },
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "RecognizeLivenessResponse",
+                "body": {
+                    "success": true,
+                    "is_live": true,
+                    "liveness_score": 97.8,
+                    "spoof_detected": false,
+                    "departamento": "ADM",
+                    "correlativo": "12345",
+                    "similarity": 96.5,
+                    "confidence": 99.1,
+                    "face_id": "face-id",
+                    "message": null
+                },
+                "failure_bodies": [
+                    {
+                        "success": false,
+                        "is_live": false,
+                        "spoof_detected": true,
+                        "message": "La imagen no corresponde a una persona real."
+                    },
+                    {
+                        "success": false,
+                        "is_live": true,
+                        "spoof_detected": false,
+                        "departamento": "ADM",
+                        "correlativo": null,
+                        "message": "No se reconoció el rostro en el departamento seleccionado."
+                    }
+                ]
             }
         },
         {
@@ -291,7 +423,31 @@
             }
         },
         {
-            "name": "Reconocer rostro automáticamente",
+            "name": "Login facial",
+            "method": "POST",
+            "path": "/api/v1/auth/facial",
+            "authentication_required": false,
+            "content_type": "multipart/form-data",
+            "parameters": [
+                {
+                    "name": "file",
+                    "location": "multipart",
+                    "type": "file",
+                    "required": true,
+                    "accepted_types": [
+                        "image/jpeg",
+                        "image/png"
+                    ]
+                }
+            ],
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "TokenResponse"
+            }
+        },
+        {
+            "name": "Reconocimiento facial automático",
             "method": "POST",
             "path": "/api/v1/recognize/automatic",
             "authentication_required": false,
@@ -311,18 +467,24 @@
             "response": {
                 "status": 200,
                 "content_type": "application/json",
-                "type": "TokenResponse",
+                "type": "OracleUser",
                 "body": {
-                    "access_token": "eyJ...",
-                    "refresh_token": "eyJ...",
-                    "expires_in": 1800,
-                    "refresh_expires_in": 2592000,
-                    "token_type": "bearer",
-                    "username": "usuario",
-                    "email": "usuario@example.com",
-                    "correlativo": "12345",
-                    "auth_method": "facial",
-                    "datos_usuario": {}
+                    "Codpers": "9876",
+                    "Usuario": "jperez",
+                    "Gracad": "DOC",
+                    "Nombres": "Juan Carlos",
+                    "Apellidos": "Pérez López",
+                    "Email": "jperez@dominio.com",
+                    "Gmail": "jperez@dominio.com",
+                    "Gmail2": null,
+                    "Correlativo": "12345",
+                    "Coddepa": "ADM",
+                    "Departamento": "Administración",
+                    "Nombrepila": "Juan Carlos",
+                    "Dpi": "1234567890101",
+                    "Carnet": "CARNET-001",
+                    "Carnet1": "CARNET-002",
+                    "Carnet2": "CARNET-003"
                 }
             }
         },
