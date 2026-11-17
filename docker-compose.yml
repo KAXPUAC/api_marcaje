@@ -7,10 +7,13 @@ services:
       - .env
     environment:
       SQLITE_DB_PATH: /data/api_marcaje.sqlite3
+      SQLITE_BACKUP_DIR: /backups
+      SQLITE_BACKUP_RETENTION: "7"
     ports:
       - "8000:8000"
     volumes:
       - api_sqlite:/data
+      - api_sqlite_backups:/backups
     restart: unless-stopped
     healthcheck:
       test:
@@ -27,3 +30,4 @@ services:
 
 volumes:
   api_sqlite:
+  api_sqlite_backups:

@@ -4,6 +4,9 @@
     "description": "Documentación de los endpoints disponibles para consumir la API.",
     "base_url": "http://localhost:8000",
     "api_prefix": "/api/v1",
+    "openapi_source": "/openapi.json",
+    "swagger_ui": "/docs",
+    "redoc_ui": "/redoc",
     "authentication": {
         "type": "Bearer JWT",
         "header": "Authorization: Bearer <access_token>",
@@ -363,7 +366,7 @@
             "name": "Sincronizar departamento",
             "method": "POST",
             "path": "/api/v1/sync/departamento/{coddepa}/",
-            "authentication_required": false,
+            "authentication_required": true,
             "parameters": [
                 {
                     "name": "coddepa",
@@ -384,7 +387,7 @@
             "name": "Estado del departamento",
             "method": "POST",
             "path": "/api/v1/sync/departamento/{coddepa}/status/",
-            "authentication_required": false,
+            "authentication_required": true,
             "parameters": [
                 {
                     "name": "coddepa",
@@ -413,7 +416,7 @@
             "name": "Listar departamentos",
             "method": "GET",
             "path": "/api/v1/sync/departamentos",
-            "authentication_required": false,
+            "authentication_required": true,
             "parameters": [],
             "request": null,
             "response": {
