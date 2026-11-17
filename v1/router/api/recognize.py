@@ -12,7 +12,6 @@ from schemas.auth import (
     LivenessSessionResponse,
     LivenessVerifyRequest,
     RecognizeLivenessResponse,
-    TokenResponse,
 )
 from aws.aws_settings import aws_settings
 from oracleug.security import decode_access_token
@@ -233,40 +232,4 @@ async def recognize_face(current_user: dict = Depends(get_current_user),
 
     except Exception as e:
         logger.error(f"Error en reconocimiento: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")
-
-
-@router.post("/automatic", response_model=TokenResponse)
-async def recognize_face_automatic(request: Request,
-                                   file: UploadFile = File(..., description="Imagen JPG/PNG")):
-    """Reconoce un rostro buscando en todos los departamentos indexados."""
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")
-
-    image_bytes = await file.read()
-    if len(image_bytes) == 0:
-        raise HTTPException(status_code=400, detail="Archivo vacío")
-
-    try:
-        match = RekognitionService.buscar_rostro_en_todos_departamentos(
-            image_bytes=image_bytes,
-            umbral=90.0
-        )
-
-        if not match:
-            raise HTTPException(
-                status_code=401,
-                detail="No se encontró coincidencia en los departamentos indexados",
-            )
-
-        response = facial_login(
-            correlativo=match["external_image_id"],
-            ip=request.state.client_ip,
-        )
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error en reconocimiento automático: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en reconocimiento: {str(e)}")
