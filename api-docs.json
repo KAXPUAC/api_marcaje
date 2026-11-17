@@ -480,11 +480,30 @@
                     "Correlativo": "12345",
                     "Coddepa": "ADM",
                     "Departamento": "Administración",
+                    "TipoUsuario": "Alumno",
                     "Nombrepila": "Juan Carlos",
                     "Dpi": "1234567890101",
                     "Carnet": "CARNET-001",
                     "Carnet1": "CARNET-002",
-                    "Carnet2": "CARNET-003"
+                    "Carnet2": "CARNET-003",
+                    "Usuarios": [
+                        {
+                            "Tipo": 1,
+                            "TipoUsuario": "Administrativo",
+                            "Usuario": "jperez",
+                            "Email": "jperez@dominio.com",
+                            "Gmail": "jperez@dominio.com",
+                            "Gmail2": null
+                        },
+                        {
+                            "Tipo": 4,
+                            "TipoUsuario": "Alumno",
+                            "Usuario": "jperez.alumno",
+                            "Email": "alumno@dominio.com",
+                            "Gmail": null,
+                            "Gmail2": null
+                        }
+                    ]
                 }
             }
         },

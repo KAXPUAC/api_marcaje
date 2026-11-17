@@ -14,6 +14,17 @@ class RecognizeResponse(BaseModel):
     confidence: Optional[float] = None
 
 
+class RecognizedUserAccount(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    tipo: Optional[int] = Field(default=None, alias="Tipo")
+    tipo_usuario: Optional[str] = Field(default=None, alias="TipoUsuario")
+    usuario: Optional[str] = Field(default=None, alias="Usuario")
+    email: Optional[str] = Field(default=None, alias="Email")
+    gmail: Optional[str] = Field(default=None, alias="Gmail")
+    gmail2: Optional[str] = Field(default=None, alias="Gmail2")
+
+
 class RecognizedUserResponse(BaseModel):
     """Datos completos del usuario asociado al rostro reconocido."""
 
@@ -30,8 +41,13 @@ class RecognizedUserResponse(BaseModel):
     correlativo: Optional[int] = Field(default=None, alias="Correlativo")
     coddepa: Optional[str] = Field(default=None, alias="Coddepa")
     departamento: Optional[str] = Field(default=None, alias="Departamento")
+    tipo_usuario: Optional[str] = Field(default=None, alias="TipoUsuario")
     nombrepila: Optional[str] = Field(default=None, alias="Nombrepila")
     dpi: Optional[str] = Field(default=None, alias="Dpi")
     carnet: Optional[str] = Field(default=None, alias="Carnet")
     carnet1: Optional[str] = Field(default=None, alias="Carnet1")
     carnet2: Optional[str] = Field(default=None, alias="Carnet2")
+    usuarios: list[RecognizedUserAccount] = Field(
+        default_factory=list,
+        alias="Usuarios",
+    )
