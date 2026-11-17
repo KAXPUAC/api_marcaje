@@ -1,8 +1,11 @@
 import base64
+import logging
 import oracledb
 from typing import Any, List, Union
 
 from oracleug.oracle_settings import OracleSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ODBType:
@@ -160,6 +163,11 @@ class Oradb:
         return self.normalize_oracle_response(
             [dict(zip(header, row)) for row in value.fetchall()]
         )
+
+    @staticmethod
+    def _oracle_error(operation: str) -> dict:
+        logger.exception("Error ejecutando operación Oracle: %s", operation)
+        return {"OOPS": "Error interno consultando Oracle"}
 
     @staticmethod
     def _bind_params(cursor, params):
@@ -337,10 +345,10 @@ class Oradb:
                         if key in ora_param:
                             result[param["nombre"]] = ora_param[key].getvalue()
                 return self.normalize_oracle_response(result)
-        except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
+        except (oracledb.DatabaseError, oracledb.InterfaceError):
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
-            return {"OOPS": str(e)}
+            return self._oracle_error(procedure_name)
         finally:
             if not self.transaction:
                 self.commit()
@@ -381,10 +389,10 @@ class Oradb:
                     config["retval_key"]: cursor_results,
                     **result
                 })
-        except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
+        except (oracledb.DatabaseError, oracledb.InterfaceError):
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
-            return {"OOPS": str(e)}
+            return self._oracle_error(function_name)
         finally:
             if not self.transaction:
                 self.commit()
@@ -409,10 +417,10 @@ class Oradb:
                     return self.normalize_oracle_response([out_results])
 
                 return None
-        except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
+        except (oracledb.DatabaseError, oracledb.InterfaceError):
             if not self.transaction and self.connection is not None:
                 self.connection.rollback()
-            return {"OOPS": str(e)}
+            return self._oracle_error("consulta SQL")
         finally:
             if not self.transaction:
                 self.commit()
@@ -432,9 +440,9 @@ class Oradb:
                 if cursor.description:
                     return self.normalize_oracle_response(self._read_rows(cursor))
                 return None
-        except (oracledb.DatabaseError, oracledb.InterfaceError) as e:
+        except (oracledb.DatabaseError, oracledb.InterfaceError):
             self.rollback_transaction()
-            return {"OOPS": str(e)}
+            return self._oracle_error("consulta SQL transaccional")
         finally:
             self.commit_transaction()
 
