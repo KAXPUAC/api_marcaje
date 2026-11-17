@@ -296,16 +296,16 @@
                 }
             },
             "notes": [
-                "El flujo login es el valor predeterminado y no requiere Bearer.",
-                "Para marcaje, enviar flow=verify y Authorization: Bearer <access_token>.",
+                "El flujo login es el valor predeterminado.",
+                "Para reconocimiento, enviar flow=recognize.",
                 "El cliente debe usar session_id, region e identity_pool_id con Amazon Amplify Face Liveness.",
                 "identity_pool_id es un identificador público de Cognito para obtener credenciales temporales; no es una clave AWS."
             ]
         },
         {
-            "name": "Autenticación con Face Liveness",
+            "name": "Login facial con Face Liveness",
             "method": "POST",
-            "path": "/api/v1/recognize/liveness",
+            "path": "/api/v1/auth/facial/liveness",
             "authentication_required": false,
             "content_type": "application/json",
             "request": {
@@ -339,47 +339,27 @@
             }
         },
         {
-            "name": "Verificar Face Liveness para marcaje",
+            "name": "Reconocimiento global con Face Liveness",
             "method": "POST",
-            "path": "/api/v1/recognize/liveness/verify",
-            "authentication_required": true,
+            "path": "/api/v1/recognize/search/liveness",
+            "authentication_required": false,
             "content_type": "application/json",
             "request": {
-                "session_id": "liveness-session-id",
-                "departamento": "ADM"
+                "session_id": "liveness-session-id"
             },
             "response": {
                 "status": 200,
                 "content_type": "application/json",
-                "type": "RecognizeLivenessResponse",
+                "type": "RecognizedUserResponse",
                 "body": {
-                    "success": true,
-                    "is_live": true,
-                    "liveness_score": 97.8,
-                    "spoof_detected": false,
-                    "departamento": "ADM",
-                    "correlativo": "12345",
-                    "similarity": 96.5,
-                    "confidence": 99.1,
-                    "face_id": "face-id",
-                    "message": null
-                },
-                "failure_bodies": [
-                    {
-                        "success": false,
-                        "is_live": false,
-                        "spoof_detected": true,
-                        "message": "La imagen no corresponde a una persona real."
-                    },
-                    {
-                        "success": false,
-                        "is_live": true,
-                        "spoof_detected": false,
-                        "departamento": "ADM",
-                        "correlativo": null,
-                        "message": "No se reconoció el rostro en el departamento seleccionado."
-                    }
-                ]
+                    "Codpers": "9876",
+                    "Usuario": "jperez",
+                    "TipoUsuario": "Administrativo",
+                    "Correlativo": 12345,
+                    "Coddepa": "ADM",
+                    "Departamento": "Administración",
+                    "Usuarios": []
+                }
             }
         },
         {

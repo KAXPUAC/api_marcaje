@@ -47,7 +47,7 @@ class LivenessSessionResponse(BaseModel):
 
 
 class LivenessSessionRequest(BaseModel):
-    flow: Literal["login", "verify"] = "login"
+    flow: Literal["login", "recognize"] = "login"
 
 
 class LivenessRequest(BaseModel):
@@ -70,24 +70,6 @@ class LivenessLoginResponse(BaseModel):
     coddepa: Optional[str] = None
     auth_method: Optional[str] = None
     datos_usuario: Optional[dict[str, Any]] = None
-    message: Optional[str] = None
-
-
-class LivenessVerifyRequest(BaseModel):
-    session_id: str
-    departamento: str
-
-
-class RecognizeLivenessResponse(BaseModel):
-    success: bool
-    is_live: bool
-    liveness_score: Optional[float] = None
-    spoof_detected: bool = False
-    departamento: Optional[str] = None
-    correlativo: Optional[str] = None
-    similarity: Optional[float] = None
-    confidence: Optional[float] = None
-    face_id: Optional[str] = None
     message: Optional[str] = None
 
 
