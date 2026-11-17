@@ -14,7 +14,7 @@ async def get_people(request: Request, correlativo: str,
                      current_user: dict = Depends(get_current_user)):
     usuario = str(current_user['username']).upper()
     empleado = Empleados()
-    return empleado.get_usuario_o_correlativo(correlativo=int(correlativo))
+    return empleado.get_usuario_por_correlativo(correlativo=int(correlativo))
 
 
 @router.get("/info_doc")

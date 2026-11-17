@@ -17,53 +17,49 @@ class Empleados:
                 FROM DBAFISICC.CACARNETBITB
                 WHERE CORRELATIVO = :1"""
 
-    # Mapeo posicional explícito (:1 a :5) para evitar el error DPY-4009
-    __usuario_o_correlativo = """
-                              SELECT B.CODPERS,
-                                     A.USUARIO,
-                                     B.GRACAD,
-                                     B.NOMBRE1 || ' ' || B.NOMBRE2     AS NOMBRES,
-                                     B.APELLIDO1 || ' ' || B.APELLIDO2 AS APELLIDOS,
-                                     A.GMAIL                           AS EMAIL,
-                                     A.GMAIL,
-                                     A.GMAIL2,
-                                     A.CORRELATIVO,
-                                     D.CODDEPA,
-                                     D.DEPARTAMENTO
-                              FROM DBAFISICC.CACARNETUSUARIOTB A
-                                       JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
-                                       LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
-                              WHERE A.CORRELATIVO = :1
-           AND :2 IS NOT NULL
-           AND A.TIPO = 1
-           AND A.ACTIVO = 1
-           AND A.LOGIN_USUARIO = 1
-           AND B.STATUS <> 'B'
+    __usuario_por_correlativo = """
+                SELECT B.CODPERS,
+                       A.USUARIO,
+                       B.GRACAD,
+                       B.NOMBRE1 || ' ' || B.NOMBRE2     AS NOMBRES,
+                       B.APELLIDO1 || ' ' || B.APELLIDO2 AS APELLIDOS,
+                       A.GMAIL                           AS EMAIL,
+                       A.GMAIL,
+                       A.GMAIL2,
+                       A.CORRELATIVO,
+                       D.CODDEPA,
+                       D.DEPARTAMENTO
+                FROM DBAFISICC.CACARNETUSUARIOTB A
+                         JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
+                         LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
+                WHERE A.CORRELATIVO = :correlativo
+                  AND A.TIPO = 1
+                  AND A.ACTIVO = 1
+                  AND A.LOGIN_USUARIO = 1
+                  AND B.STATUS <> 'B'
+                """
 
-                              UNION ALL
-
-                              SELECT B.CODPERS,
-                                     A.USUARIO,
-                                     B.GRACAD,
-                                     B.NOMBRE1 || ' ' || B.NOMBRE2     AS NOMBRES,
-                                     B.APELLIDO1 || ' ' || B.APELLIDO2 AS APELLIDOS,
-                                     A.GMAIL                           AS EMAIL,
-                                     A.GMAIL,
-                                     A.GMAIL2,
-                                     A.CORRELATIVO,
-                                     D.CODDEPA,
-                                     D.DEPARTAMENTO
-                              FROM DBAFISICC.CACARNETUSUARIOTB A
-                                       JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
-                                       LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
-                              WHERE A.USUARIO = :3
-           AND :4 IS NULL
-           AND :5 IS NOT NULL
-           AND A.TIPO = 1
-           AND A.ACTIVO = 1
-           AND A.LOGIN_USUARIO = 1
-                               AND B.STATUS <> 'B' \
-                              """
+    __usuario_por_usuario = """
+                SELECT B.CODPERS,
+                       A.USUARIO,
+                       B.GRACAD,
+                       B.NOMBRE1 || ' ' || B.NOMBRE2     AS NOMBRES,
+                       B.APELLIDO1 || ' ' || B.APELLIDO2 AS APELLIDOS,
+                       A.GMAIL                           AS EMAIL,
+                       A.GMAIL,
+                       A.GMAIL2,
+                       A.CORRELATIVO,
+                       D.CODDEPA,
+                       D.DEPARTAMENTO
+                FROM DBAFISICC.CACARNETUSUARIOTB A
+                         JOIN DBAFISICC.NOPERSONALTB B ON B.CORRELATIVO = A.CORRELATIVO
+                         LEFT JOIN DBAFISICC.EMPLEADOSDYNAMICSVW D ON D.CORRELATIVO = A.CORRELATIVO
+                WHERE UPPER(A.USUARIO) = UPPER(:usuario)
+                  AND A.TIPO = 1
+                  AND A.ACTIVO = 1
+                  AND A.LOGIN_USUARIO = 1
+                  AND B.STATUS <> 'B'
+                """
 
     __email = """
                 SELECT B.CODPERS,
@@ -111,26 +107,23 @@ class Empleados:
         }]
         return self.__con.execute_query(query=self.__info, params=parametros)
 
-    def get_usuario_o_correlativo(self, correlativo: int = None, usuario: str = None):
-        """
-        Busca un usuario por correlativo o por nombre de usuario enviando los 5 bindings posicionales.
-        """
-        val_correlativo = int(correlativo) if correlativo is not None else None
+    def get_usuario_por_correlativo(self, correlativo: int):
+        parametros = [{
+            "nombre": "correlativo",
+            "valor": int(correlativo),
+            "tipo": ODBType.INT,
+            "direccion": "IN",
+        }]
+        return self.__con.execute_query(query=self.__usuario_por_correlativo, params=parametros)
 
-        parametros = [
-            # :1 -> A.CORRELATIVO = :1
-            {"nombre": "correlativo1", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
-            # :2 -> AND :2 IS NOT NULL
-            {"nombre": "correlativo2", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
-            # :3 -> A.USUARIO = :3
-            {"nombre": "usuario1", "valor": usuario, "tipo": ODBType.VARCHAR2, "direccion": "IN"},
-            # :4 -> AND :4 IS NULL
-            {"nombre": "correlativo3", "valor": val_correlativo, "tipo": ODBType.INT, "direccion": "IN"},
-            # :5 -> AND :5 IS NOT NULL
-            {"nombre": "usuario2", "valor": usuario, "tipo": ODBType.VARCHAR2, "direccion": "IN"},
-        ]
-
-        return self.__con.execute_query(query=self.__usuario_o_correlativo, params=parametros)
+    def get_usuario_por_usuario(self, usuario: str):
+        parametros = [{
+            "nombre": "usuario",
+            "valor": usuario.strip().upper(),
+            "tipo": ODBType.VARCHAR2,
+            "direccion": "IN",
+        }]
+        return self.__con.execute_query(query=self.__usuario_por_usuario, params=parametros)
 
     def get_usuario_por_email(self, email: str):
         parametros = [{

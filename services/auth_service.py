@@ -131,7 +131,7 @@ def login_api(username: str, password: str, ip: str = "0.0.0.0"):
     logger.info("Solicitud de autenticación para %s desde %s", username, ip)
 
     try:
-        users = __empleados.get_usuario_o_correlativo(usuario=username.strip().upper())
+        users = __empleados.get_usuario_por_usuario(usuario=username)
     except Exception:
         logger.exception("Error consultando el usuario %s", username)
         raise HTTPException(
@@ -183,7 +183,7 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
         )
 
     username = payload["username"]
-    user = __empleados.get_usuario_o_correlativo(usuario=username)
+    user = __empleados.get_usuario_por_usuario(usuario=username)
     user = _get_first_user(user)
     if not user:
         raise HTTPException(
@@ -199,7 +199,7 @@ def refresh_access_token(refresh_token: str, ip: str = "0.0.0.0"):
 
 def facial_login(correlativo: str, ip: str = "0.0.0.0", auth_method: str = "facial"):
     """Genera tokens usando el usuario asociado al correlativo reconocido."""
-    users = __empleados.get_usuario_o_correlativo(correlativo=int(correlativo))
+    users = __empleados.get_usuario_por_correlativo(correlativo=int(correlativo))
     user = _get_first_user(users)
     if not user:
         raise HTTPException(
