@@ -7,8 +7,12 @@ from services.liveness_session_service import LivenessSessionService
 from services.rekognition_service import RekognitionService
 
 
-def get_liveness_image(session_id: str, flow: str = "recognize") -> bytes:
-    LivenessSessionService.consume(session_id, flow=flow)
+def get_liveness_image(
+    session_id: str,
+    flow: str = "recognize",
+    owner: str | None = None,
+) -> bytes:
+    LivenessSessionService.consume(session_id, flow=flow, owner=owner)
     liveness = RekognitionService.obtener_resultado_liveness(session_id)
     confidence = liveness.get("confidence")
     score = float(confidence) if confidence is not None else None

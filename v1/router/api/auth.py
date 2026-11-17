@@ -6,6 +6,7 @@ from services.liveness_session_service import LivenessSessionService
 from schemas.auth import (
     LivenessLoginResponse,
     LivenessRequest,
+    LivenessSessionResponse,
     RefreshTokenRequest,
     SocialLoginRequest,
     TokenResponse,
@@ -129,6 +130,33 @@ def facial_liveness_login(request: Request, data: LivenessRequest):
         raise HTTPException(
             status_code=500,
             detail="Error procesando la autenticación facial",
+        ) from exc
+
+
+@router.post(
+    "/facial/liveness/session",
+    response_model=LivenessSessionResponse,
+    summary="Crear sesión pública de liveness para login",
+    description="Crea una sesión de Amazon Face Liveness exclusiva para autenticación facial.",
+)
+def create_facial_liveness_session():
+    try:
+        session_id = RekognitionService.crear_sesion_liveness()
+        LivenessSessionService.register(
+            session_id=session_id,
+            owner=None,
+            flow="login",
+            ttl=aws_settings.face_liveness_session_ttl_seconds(),
+        )
+        return {
+            "session_id": session_id,
+            "region": aws_settings.region(),
+            "identity_pool_id": aws_settings.identity_pool_id(),
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo crear la sesión de liveness",
         ) from exc
 
 

@@ -81,7 +81,11 @@ def mark_administrative_attendance_liveness(
 ):
     """Valida liveness y marca entrada o salida de un administrativo."""
     try:
-        image_bytes = get_liveness_image(data.session_id, "attendance_admin")
+        image_bytes = get_liveness_image(
+            data.session_id,
+            "attendance_admin",
+            owner=current_user.get("username"),
+        )
         usuario = find_user_data_by_image(image_bytes, data.departamento.strip())
         _, tipo_usuario = get_user_type(usuario, {1})
         resultado = PkgPersonal(
@@ -165,7 +169,11 @@ def mark_teacher_attendance_liveness(
 ):
     """Valida liveness y marca entrada o salida de un docente o tutor."""
     try:
-        image_bytes = get_liveness_image(data.session_id, "attendance_teacher")
+        image_bytes = get_liveness_image(
+            data.session_id,
+            "attendance_teacher",
+            owner=current_user.get("username"),
+        )
         usuario = find_user_data_by_image(image_bytes)
         _, tipo_usuario = get_user_type(usuario, {2, 3})
         resultado = PkgPersonal(

@@ -213,13 +213,13 @@
             }
         },
         {
-            "name": "Crear sesión de Face Liveness",
+            "name": "Crear sesión protegida de Face Liveness",
             "method": "POST",
             "path": "/api/v1/recognize/liveness/session",
-            "authentication_required": false,
+            "authentication_required": true,
             "content_type": "application/json",
             "request": {
-                "flow": "login"
+                "flow": "recognize"
             },
             "parameters": [],
             "response": {
@@ -232,11 +232,28 @@
                 }
             },
             "notes": [
-                "El flujo login es el valor predeterminado.",
-                "Para reconocimiento, enviar flow=recognize.",
+                "Solo acepta los flujos recognize, attendance_admin y attendance_teacher.",
                 "El cliente debe usar session_id, region e identity_pool_id con Amazon Amplify Face Liveness.",
                 "identity_pool_id es un identificador público de Cognito para obtener credenciales temporales; no es una clave AWS."
             ]
+        },
+        {
+            "name": "Crear sesión pública de Face Liveness para login",
+            "method": "POST",
+            "path": "/api/v1/auth/facial/liveness/session",
+            "authentication_required": false,
+            "content_type": "application/json",
+            "request": null,
+            "response": {
+                "status": 200,
+                "content_type": "application/json",
+                "type": "LivenessSessionResponse",
+                "body": {
+                    "session_id": "liveness-session-id",
+                    "region": "us-east-1",
+                    "identity_pool_id": "us-east-1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                }
+            }
         },
         {
             "name": "Login facial con Face Liveness",
@@ -278,7 +295,7 @@
             "name": "Reconocimiento global con Face Liveness",
             "method": "POST",
             "path": "/api/v1/recognize/search/liveness",
-            "authentication_required": false,
+            "authentication_required": true,
             "content_type": "application/json",
             "request": {
                 "session_id": "liveness-session-id"

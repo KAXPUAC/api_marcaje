@@ -1,11 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, Path, HTTPException, Body
+from fastapi import APIRouter, UploadFile, File, Path, HTTPException, Depends
+from services.auth_service import get_current_user
 from services.rekognition_service import RekognitionService
 from services.liveness_session_service import LivenessSessionService
 from services.recognition_service import find_user_by_image, get_liveness_image
 from schemas.recognize import RecognizedUserResponse
 from schemas.auth import (
     LivenessRequest,
-    LivenessSessionRequest,
+    ProtectedLivenessSessionRequest,
     LivenessSessionResponse,
 )
 from aws.aws_settings import aws_settings
@@ -18,15 +19,17 @@ router = APIRouter(prefix="/recognize", tags=["Reconocimiento Facial"])
 
 @router.post("/liveness/session", response_model=LivenessSessionResponse)
 def create_liveness_session(
-        data: LivenessSessionRequest | None = Body(default=None),
+        data: ProtectedLivenessSessionRequest,
+        current_user: dict = Depends(get_current_user),
 ):
-    """Crea una sesión que el cliente debe completar usando Face Liveness."""
-    flow = data.flow if data else "login"
+    """Crea una sesión protegida para reconocimiento o marcaje."""
+    flow = data.flow
+    owner = current_user.get("username")
     try:
         session_id = RekognitionService.crear_sesion_liveness()
         LivenessSessionService.register(
             session_id=session_id,
-            owner=None,
+            owner=owner,
             flow=flow,
             ttl=aws_settings.face_liveness_session_ttl_seconds(),
         )
@@ -47,10 +50,14 @@ def create_liveness_session(
 def recognize_in_department_with_liveness(
     data: LivenessRequest,
     department_id: str = Path(..., description="Código de departamento (CODDEPA)"),
+    current_user: dict = Depends(get_current_user),
 ):
     """Valida liveness y reconoce un rostro dentro de un departamento."""
     try:
-        image_bytes = get_liveness_image(data.session_id)
+        image_bytes = get_liveness_image(
+            data.session_id,
+            owner=current_user.get("username"),
+        )
         return find_user_by_image(image_bytes, department_id)
     except HTTPException:
         raise
@@ -63,10 +70,16 @@ def recognize_in_department_with_liveness(
 
 
 @router.post("/search/liveness", response_model=RecognizedUserResponse)
-def recognize_globally_with_liveness(data: LivenessRequest):
+def recognize_globally_with_liveness(
+    data: LivenessRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Valida liveness y reconoce un rostro en todos los departamentos."""
     try:
-        image_bytes = get_liveness_image(data.session_id)
+        image_bytes = get_liveness_image(
+            data.session_id,
+            owner=current_user.get("username"),
+        )
         return find_user_by_image(image_bytes)
     except HTTPException:
         raise
@@ -80,8 +93,9 @@ def recognize_globally_with_liveness(data: LivenessRequest):
 
 @router.post("/{department_id}/search", response_model=RecognizedUserResponse)
 def recognize_in_department(
-                                  file: UploadFile = File(..., description="Imagen JPG/PNG"),
-                                  department_id: str = Path(..., description="Código de departamento (CODDEPA)")):
+                                   file: UploadFile = File(..., description="Imagen JPG/PNG"),
+                                   department_id: str = Path(..., description="Código de departamento (CODDEPA)"),
+                                   current_user: dict = Depends(get_current_user)):
     """Reconoce un rostro en un departamento y devuelve sus datos completos."""
     # Validar tipo de archivo
     if not file.content_type or not file.content_type.startswith('image/'):
@@ -103,7 +117,8 @@ def recognize_in_department(
 
 @router.post("/search", response_model=RecognizedUserResponse)
 def search_face_global(
-                             file: UploadFile = File(..., description="Imagen JPG/PNG")):
+                             file: UploadFile = File(..., description="Imagen JPG/PNG"),
+                             current_user: dict = Depends(get_current_user)):
     """Busca un rostro en todas las colecciones y devuelve sus datos asociados."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen (JPG/PNG)")

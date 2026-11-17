@@ -46,13 +46,12 @@ class LivenessSessionResponse(BaseModel):
     identity_pool_id: str
 
 
-class LivenessSessionRequest(BaseModel):
+class ProtectedLivenessSessionRequest(BaseModel):
     flow: Literal[
-        "login",
         "recognize",
         "attendance_admin",
         "attendance_teacher",
-    ] = "login"
+    ]
 
 
 class LivenessRequest(BaseModel):
