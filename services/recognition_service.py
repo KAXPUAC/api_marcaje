@@ -1,3 +1,7 @@
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 from fastapi import HTTPException
 
 from aws.aws_settings import aws_settings
@@ -5,6 +9,23 @@ from oracleug.scripts.reconocimiento import Reconocimiento
 from schemas.recognize import RecognizedUserResponse
 from services.liveness_session_service import LivenessSessionService
 from services.rekognition_service import RekognitionService
+
+
+_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+_liveness_logger = logging.getLogger("liveness")
+if not _liveness_logger.handlers:
+    _liveness_logger.setLevel(logging.INFO)
+    _liveness_logger.addHandler(
+        RotatingFileHandler(
+            _LOG_DIR / "liveness.log",
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+        )
+    )
+    _liveness_logger.propagate = False
 
 
 def get_liveness_image(
@@ -15,11 +36,20 @@ def get_liveness_image(
     LivenessSessionService.consume(session_id, flow=flow, owner=owner)
     liveness = RekognitionService.obtener_resultado_liveness(session_id)
     confidence = liveness.get("confidence")
+    threshold = aws_settings.face_liveness_confidence_threshold()
+    _liveness_logger.info(
+        "Face Liveness session_id=%s flow=%s status=%s confidence=%s threshold=%s",
+        session_id,
+        flow,
+        liveness.get("status"),
+        confidence,
+        threshold,
+    )
     score = float(confidence) if confidence is not None else None
     is_live = (
         liveness.get("status") == "SUCCEEDED"
         and score is not None
-        and score >= aws_settings.face_liveness_confidence_threshold()
+        and score >= threshold
     )
     if not is_live:
         raise HTTPException(
