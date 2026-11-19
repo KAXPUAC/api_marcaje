@@ -225,6 +225,20 @@ def get_laboratorios(request: Request, current_user: dict = Depends(get_current_
         raise HTTPException(status_code=500, detail="Error obteniendo los laboratorios") from exc
 
 
+@router.get(
+    "/es_administrativo",
+    summary="Verificar pertenencia a Informática o Prestaciones",
+)
+def belongs_to_allowed_department(current_user: dict = Depends(get_current_user)):
+    """Indica si el usuario pertenece a Informática o Prestaciones."""
+    coddepa = str(current_user.get("coddepa") or "").strip()
+    return {
+        "pertenece": coddepa in {"0306", "0313"},
+        "coddepa": coddepa or None,
+        "departamento": current_user.get("departamento"),
+    }
+
+
 @router.get("/info_admin")
 def get_people(request: Request, correlativo: str,
                      current_user: dict = Depends(get_current_user)):
