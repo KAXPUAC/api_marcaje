@@ -10,11 +10,13 @@ from services.attendance_service import (
 )
 from services.recognition_service import find_user_data_by_image, get_liveness_image
 from schemas.people import (
+    AdministrativeAttendanceResponse,
     AdministrativeLivenessRequest,
     AttendanceResponse,
+    PhotoBase64Response,
     TeacherLivenessRequest,
 )
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 import logging
 
 logger = logging.getLogger(__name__)
@@ -67,7 +69,8 @@ def mark_administrative_attendance(
 
 @router.post(
     "/asistencia/administrative/liveness",
-    response_model=AttendanceResponse,
+    response_model=AdministrativeAttendanceResponse,
+    response_model_by_alias=True,
     summary="Marcar asistencia administrativa con prueba de vida",
     description=(
             "Valida la prueba de vida de Amazon, reconoce al usuario administrativo "
@@ -94,12 +97,16 @@ def mark_administrative_attendance_liveness(
         ).ingreso_personal(
             pcodpers=str(get_value(usuario, "Codpers")),
         )
-        return build_attendance_response(
+        asistencia = build_attendance_response(
             resultado,
             usuario,
             tipo_usuario,
             departamento=data.departamento,
         )
+        return AdministrativeAttendanceResponse.model_validate({
+            **asistencia.model_dump(),
+            **usuario,
+        })
     except HTTPException:
         raise
     except Exception as exc:
@@ -249,7 +256,54 @@ def get_people(request: Request, correlativo: str,
 
 @router.get("/info_doc")
 def get_doc(request: Request, correlativo: str,
-                  current_user: dict = Depends(get_current_user)):
+                   current_user: dict = Depends(get_current_user)):
     usuario = str(current_user['username']).upper()
     pkg = PkgPeople(usuario=usuario, ip=request.state.client_ip)
     return pkg.datosnopersonaltb(correlativo=correlativo)
+
+
+@router.get(
+    "/foto/{correlativo}",
+    response_class=Response,
+    summary="Obtener foto como bytes",
+)
+def get_photo_bytes(
+        correlativo: int,
+        current_user: dict = Depends(get_current_user),
+):
+    """Devuelve la foto LONG RAW asociada al correlativo."""
+    try:
+        foto = Empleados().get_foto_bytes(correlativo)
+        if foto is None:
+            raise HTTPException(status_code=404, detail="Foto no encontrada")
+        return Response(content=foto, media_type="application/octet-stream")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error obteniendo la foto del correlativo %s", correlativo)
+        raise HTTPException(status_code=500, detail="Error obteniendo la foto") from exc
+
+
+@router.get(
+    "/fotoB64/{correlativo}",
+    response_model=PhotoBase64Response,
+    summary="Obtener foto como base64",
+)
+def get_photo_base64(
+        correlativo: int,
+        current_user: dict = Depends(get_current_user),
+) -> PhotoBase64Response:
+    """Devuelve la foto LONG RAW asociada al correlativo en base64."""
+    try:
+        foto = Empleados().get_foto_base64(correlativo)
+        if foto is None:
+            raise HTTPException(status_code=404, detail="Foto no encontrada")
+        return PhotoBase64Response(
+            correlativo=correlativo,
+            foto_base64=foto,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error obteniendo la foto base64 del correlativo %s", correlativo)
+        raise HTTPException(status_code=500, detail="Error obteniendo la foto") from exc

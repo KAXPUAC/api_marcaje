@@ -1,10 +1,22 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from v1.router.api import sync, recognize, auth, people
 from services.request_service import get_client_ip
 from services.sqlite_store import sqlite_store
 
 app = FastAPI(title="API de Marcaje", version="1.0.0",
               description="API para el sistema de marcaje de personal y docentes, con reconocimiento facial y autenticación social.")
+
+origins = ["https://localhost:5173", "http://localhost:5173"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=86400
+)
 
 
 @app.middleware("http")
